@@ -1,0 +1,5 @@
+#!/bin/bash -e
+mkdir m4 2>/dev/null || true
+libtoolize
+autoreconf -fi -Wall -I.
+rm -rf autom4te.cache

@@ -1,0 +1,13 @@
+Example usage of ``ufser``
+==========================
+
+    >>> import ufser
+
+    >>> ufser.version is not None
+    True
+
+    >>> ufser.serialize('hello')
+    b'\x00\x00\x00\x01s\x00\x00\x00\t\x00\x00\x00\x05hello'
+
+    >>> ufser.serialize(['hello', 'world'])
+    b'\x00\x00\x00\x02ls\x00\x00\x00\x16\x00\x00\x00\x02\x00\x00\x00\x05hello\x00\x00\x00\x05world'
