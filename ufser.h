@@ -6312,7 +6312,7 @@ inline std::pair<char*, size_t> serialize(Alloc alloc, const T &t, uf::use_tags_
 {
     static_assert(uf::impl::is_serializable_f<T, true, tags...>(), "Type must be serializable.");
     static_assert(std::is_invocable_r<char *, Alloc, size_t>::value, "Alloc must be of signature 'char* Alloc(size_t)'.");
-    if (uf::impl::is_serializable_f<T, false, tags...>() && std::is_invocable_r<char *, Alloc, size_t>::value) {
+    if constexpr (uf::impl::is_serializable_f<T, false, tags...>() && std::is_invocable_r<char *, Alloc, size_t>::value) {
         using type = typename std::remove_cvref_t<T>;
         if constexpr (impl::has_before_serialization_inside_v<type, tags...>)
             if (auto r = impl::call_before_serialization(&t, tt...); r.obj)
