@@ -3239,7 +3239,7 @@ constexpr size_t serialize_len(const std::tuple<T, TT...> &t, tags... tt) noexce
 template <typename T, size_t L, typename ...tags>
 constexpr size_t serialize_len(const std::array<T, L> &o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len)) 
 { size_t ret = 0; for (auto &t : o) ret += serialize_len(t, tt...); return ret; }
-template <typename T, size_t L, typename ...tags, typename = std::enable_if_t<!std::is_same_v<char, T>>>
+template <typename T, size_t L, typename ...tags, typename>
 constexpr size_t serialize_len(T const (&o)[L], tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len)) 
 { size_t ret = 0; for (auto &t : o) ret += serialize_len(t, tt...); return ret; }
 template <typename T, typename ...tags> constexpr size_t serialize_len(const std::unique_ptr<T> &p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len)) 
