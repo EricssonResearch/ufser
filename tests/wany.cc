@@ -947,3 +947,25 @@ TEST_CASE("linear_search") {
     CHECK(ret.second=="");
     CHECK(!ret.first);
 }
+
+TEST_CASE("from any") {
+    uf::any a(uf::from_text, "{\"a\":2,\"b\":4}");
+    uf::wview va(uf::from_raw, a); //'a' is now officially invalid as va can destroy its value
+    CHECK(va.as_any().print()=="<msi>{\"a\":2,\"b\":4}");
+    //undocumented: writing to 'va' modifies the underlying 'a' storage.
+    //If we write a value of the same length 'a' remains valid type+value pair
+    va[0][1].set(3); //just change the integer to the same value
+    CHECK(va.as_any().has_view()); //Value remained in a single chunk
+    CHECK(va.as_any().print()=="<msi>{\"a\":3,\"b\":4}");
+    CHECK(a.print()=="<msi>{\"a\":3,\"b\":4}");
+}
+
+TEST_CASE("from any_view") {
+    uf::any a(uf::from_text, "{\"a\":2,\"b\":4}");
+    uf::wview va(uf::from_raw, uf::any_view(a)); //'a' remained valid
+    CHECK(va.as_any().print()=="<msi>{\"a\":2,\"b\":4}");
+    va[0][1].set(3); 
+    CHECK(!va.as_any().has_view()); //Value must fragment as the underlying storage (any_view) is immutable
+    CHECK(va.as_any().print()=="<msi>{\"a\":3,\"b\":4}");
+    CHECK(a.print()=="<msi>{\"a\":2,\"b\":4}"); //no change
+}

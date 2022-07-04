@@ -124,6 +124,11 @@ public:
             void* mem = Allocator<char>().allocate(memsize(len));
             p = copy ? new(mem) sview(len, true, sv) : new(mem) sview(std::string_view(sv, len));
         }
+        /** Create a read-only, non-owning or writeable, owning (latter is default). */
+        ptr(uint32_t len, const char* sv, bool copy = true) {
+            void* mem = Allocator<char>().allocate(memsize(len));
+            p = copy ? new(mem) sview(len, true, sv) : new(mem) sview(std::string_view(sv, len));
+        }
         /** Create a writable, non-owning or owning (latter is default). */
         ptr(std::string& ss, bool copy = true) {
             void* mem = Allocator<char>().allocate(memsize(ss.length()));
@@ -140,6 +145,11 @@ public:
             const size_t len = strlen(ss);
             void* mem = Allocator<char>().allocate(memsize(len));
             p = copy ? new(mem) sview(len, true, ss) : new(mem) sview(ss);
+        }
+        /** Create a writable, non-owning or owning (latter is default). */
+        ptr(uint32_t len, char* ss, bool copy = true) {
+            void* mem = Allocator<char>().allocate(memsize(len));
+            p = copy ? new(mem) sview(len, true, ss) : new(mem) sview(ss, len);
         }
         /** Create a non-owning, non-writeable from a C string literal. */
         template <uint32_t LEN>
@@ -703,6 +713,24 @@ public:
             try { p = new(mem) wview(t); }
             catch (...) { Allocator<char>().deallocate(mem, sizeof(wview)); throw; }
         }
+        /** Construct a wview from an any. If you write anything in the resulting wview, 
+         * the memory area of the 'any' may be overwritten rendering the 'any' invalid.
+         * Thus do not use the supplied 'any' after this ctor - but keep it allocated
+         * as the resulting wview refers to it. The lifetime of the supplied 'any'
+         * (even if it enters an undefined, but destoryable state) shall be longer than
+         * that of the resulting wview.
+         * This is done to save on memory allocations and copies. If you want the 
+         * 'any' to remain utouched, use a const ref or an any_view.*/
+        explicit ptr(uf::from_raw_t, uf::any& a)
+            : ptr(sview_ptr(a.type().size(),  const_cast<char*>(a.type().data()),  false), 
+                  sview_ptr(a.value().size(), const_cast<char*>(a.value().data()), false)) {}
+
+        /** Construct a wview from an any_view. This is a no-copy operation.
+         * The lifetime of the resulting wview shall be longer than that of 'a'.*/
+        explicit ptr(uf::from_raw_t, const uf::any_view& a)
+            : ptr(sview_ptr(a.type(),  false),
+                  sview_ptr(a.value(), false)) {}
+
         ptr() noexcept = default;
         ptr(const ptr&) noexcept = default;
         ptr(ptr&&) noexcept = default;
