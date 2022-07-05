@@ -806,7 +806,7 @@ namespace uf
 
 // This is slow + incomplete: we are waiting for std::fmt
 template<typename... TT>
-auto concat(TT const&... tt) { return (std::ostringstream() << ... << tt).str(); }
+auto concat(TT const&... tt) { std::ostringstream o; (o << ... << tt); return o.str(); }
 
 struct error : public std::runtime_error {
     [[nodiscard]] explicit error(std::string &&msg) : runtime_error(std::move(msg)) {}
