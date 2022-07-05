@@ -1150,7 +1150,7 @@ uf::impl::serialize_print_by_type_to(std::string &to, bool json_like, unsigned m
     {
         bool b;
         if (deserialize_from<false>(p, end, b)) goto value_mismatch;
-        to.append(json_like ? (b ? "True" : "False") : b ? "true" : "false");
+        to.append(b ? "true" : "false");
         type.remove_prefix(1);
         break;
     }

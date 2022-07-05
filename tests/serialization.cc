@@ -1163,7 +1163,7 @@ TEST_CASE("json-like") {
                         std::vector{1, 2, 3}, std::map<std::string, int>{{"a", 1}, {"b", 2}});
     uf::any a(t);
     CHECK(a.print(0, {}, '%', false) == "<t9isdt2bbaodclimsi>(1,\"aa\",42.2,(true,false),<i>23,0.1,'x',[1,2,3],{\"a\":1,\"b\":2})");
-    CHECK(a.print(0, {}, '%', true) == "[1,\"aa\",42.2,[True,False],23,0.1,\"x\",[1,2,3],{\"a\":1,\"b\":2}]");
+    CHECK(a.print(0, {}, '%', true) == "[1,\"aa\",42.2,[true,false],23,0.1,\"x\",[1,2,3],{\"a\":1,\"b\":2}]");
 }
 
 TEST_CASE("Heterogeneous list/map text parsing ") {
@@ -1623,3 +1623,11 @@ TEST_CASE("Reflection on value types") {
     CHECK(uf::any(std::pair(42.2, 43.1)).get_as<test_tag>(uf::allow_converting_double, uf::use_tags, tag{}).t.i == 43);
 }
 #endif
+
+TEST_CASE("JSON") {
+    using namespace std::literals;
+    auto json = R"({"x":1,"y":true,"z":null})"sv;
+    uf::any a;
+    REQUIRE_NOTHROW(a.assign(uf::from_text, json));
+    CHECK(a.print_json()==json);
+}

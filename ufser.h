@@ -4115,7 +4115,6 @@ struct any_view
      * @param [in] escape_char What escape character to use.
      * @param [in] json_like Tf true, we attempt to be as json compatible as possible.
      *             - characters are printed as a single character string
-     *             - true/false are printed lower case
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
      *             - errors are printed as string
@@ -4137,7 +4136,6 @@ struct any_view
      * @param [in] json_like Tf true, we attempt to be as json compatible as possible.
      *             - we dont print the type for uf::any
      *             - characters are printed as a single character string
-     *             - true/false are printed lower case
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
      *             - errors are printed as string
@@ -4154,6 +4152,11 @@ struct any_view
             ret.append("...");
         }
         return ret;
+    }
+
+    /** Syntactic sugar for print(..., ..., ..., json_like = true). */
+    [[nodiscard]] std::string print_json(unsigned max_len = 0, std::string_view chars = {}, char escape_char = '%') const {
+        return print(max_len, chars, escape_char, true);
     }
 
     /** Checks if our content is exactly the same type that the given typestring.
@@ -6071,7 +6074,6 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
  * @param [in] json_like Tf true, we attempt to be as json compatible as possible.
  *             - we dont print the type for uf::any
  *             - characters are printed as a single character string
- *             - true/false are printed lower case
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - errors are printed as string
@@ -6737,7 +6739,6 @@ convert(std::string_view from_type, std::string_view to_type,
  * @param [in] t The C++ variable to print.
  * @param [in] json_like Tf true, we attempt to be as json compatible as possible.
  *             - characters are printed as a single character string
- *             - true/false are printed lower case
  *             - enumerations are printed as an integer
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
@@ -6771,7 +6772,6 @@ inline std::string serialize_print(const T& t, bool json_like = false, unsigned 
  * @param [in] max_len A maximum length. Characters beyond are trimmed. Zero is unlimited.
  * @param [in] json_like Tf true, we attempt to be as json compatible as possible.
  *             - characters are printed as a single character string
- *             - true/false are printed lower case
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - errors are printed as string
