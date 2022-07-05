@@ -4165,7 +4165,7 @@ struct any_view
      * Equivalent, but faster than 'converts_to(allow_converting_none)'.*/
     template <typename T, typename ...tags>
     [[nodiscard]] bool is(uf::use_tags_t = uf::use_tags, tags...) const noexcept {
-        static_assert(uf::impl::is_deserializable_f<T, true, true, tags...>(), "Type must be possible to deserializable into.");
+        static_assert(uf::impl::is_deserializable_f<T, true, true, tags...>(), "Type must be possible to deserialize into.");
         return _type == deserialize_type<T, tags...>(); 
     }
 
@@ -4209,6 +4209,19 @@ struct any_view
      * @exception uf::typestring_error bad typestring
      * @exception uf::value_mismatch_error the from type and serialized data mismatch*/
     [[nodiscard]] any convert_to(std::string_view t, serpolicy policy = allow_converting_all, bool check = false) const;
+
+    /** Converts the content to the type given using the policy.
+     * @param [in] policy The conversion policy
+     * @param [in] check If true, we check the validity of from_type/from_data and of to_type
+     *             Defaults to false.
+     * @returns an uf::any containing the converted type/value.
+     * @exception uf::type_mismatch_error the conversion is not possible (with this policy)
+     * @exception uf::expected_with_error expected values holding errors would need to be
+     *   converted to a non-expected type during conversion.
+     * @exception uf::typestring_error bad typestring
+     * @exception uf::value_mismatch_error the from type and serialized data mismatch*/
+    template <typename T>
+    [[nodiscard]] any convert_to(serpolicy policy = allow_converting_all, bool check = false) const;
 
     /** Converts the content to the type given using the policy.
      * @param [in] t The typestring  of the target type
@@ -4561,7 +4574,16 @@ inline any any_view::convert_to(std::string_view t, serpolicy policy, bool check
     auto s = convert(_type, t, policy, _value, check );
     return {from_type_value_unchecked, std::string(t), s ? std::move(*s) : std::string(_value)};
 }
-    
+
+template <typename T>
+inline any any_view::convert_to(serpolicy policy, bool check) const {
+    static_assert(uf::impl::is_deserializable_f<T, true>(), "Type must be possible to deserialize into.");
+    if constexpr (uf::impl::is_deserializable_f<T, true>())
+        return convert_to(uf::serialize_type<T>(), policy, check);
+    else
+        return {};
+}
+
 static_assert(has_tuple_for_serialization_tag_v<false, any_view>, "HEJ!!!");
 static_assert(has_tuple_for_serialization_tag_v<true, any_view>, "HEJ!!!");
 

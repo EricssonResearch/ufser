@@ -581,6 +581,7 @@ TEST_CASE("convert")
     CHECK(uf::any(uf::from_text, "<>3.0").print() == "<a><d>3.");
     CHECK(uf::any(uf::from_text, "<i>3.0").print()=="<a><i>3");
     CHECK(uf::any(ei).convert_to("d").print() == "<d>3.");
+    CHECK(uf::any(ei).convert_to<double>().print() == "<d>3.");
     CHECK(uf::any(aei).convert_to("d").print() == "<d>3.");
     CHECK(uf::any(uf::from_text, "<a><xi>3.0").print() == "<a><a><xi>3");
     CHECK(uf::any(uf::from_text, "<xs>['h','e','l','l','o']").print() == "<a><xs>\"hello\"");
@@ -618,8 +619,8 @@ void TC(T t, U u, uf::serpolicy policy)
     else CHECK(uf::cant_convert(uf::serialize_type<T>(), uf::deserialize_type<U>(), policy, at.value()));
     //Test that if we convert t to U in serialized form we get the same as in the first step
     if constexpr (should_with_content && check_equality_op::has<U>::value)
-        CHECK_MESSAGE(u == at.convert_to(uf::deserialize_type<U>(), policy).template get_as<U>(uf::allow_converting_none),
-                      uf::concat("u=", u, " other=", at.convert_to(uf::deserialize_type<U>(), policy).template get_as<U>(uf::allow_converting_none)));
+        CHECK_MESSAGE(u == at.convert_to<U>(policy).template get_as<U>(uf::allow_converting_none),
+                      uf::concat("u=", u, " other=", at.convert_to<U>(policy).template get_as<U>(uf::allow_converting_none)));
 }
 
 //Test the convertibility of conversion with the given policy only
@@ -1274,10 +1275,10 @@ void test_error_msg(std::string_view type, std::string_view value,
     if (verr) check_error(verr->what(), err_msg, encaps_type, false, "convert2"); 
 
     if (type == uf::deserialize_type<T>())
-        CHECK_NOTHROW((void)a.convert_to(uf::deserialize_type<T>(), uf::allow_converting_all, false));
+        CHECK_NOTHROW((void)a.convert_to<T>(uf::allow_converting_all, false));
 
-    CHECK_THROWS((void)a.convert_to(uf::deserialize_type<T>(), uf::allow_converting_all, true));
-    try { (void)a.convert_to(uf::deserialize_type<T>(), uf::allow_converting_all, true); }
+    CHECK_THROWS((void)a.convert_to<T>(uf::allow_converting_all, true));
+    try { (void)a.convert_to<T>(uf::allow_converting_all, true); }
     catch (const uf::value_error &e) { check_error(e.what(), err_msg, encaps_type, false, "convert3"); }
 }
 
