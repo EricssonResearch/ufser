@@ -1,0 +1,29 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' || $CI_PIPELINE_SOURCE == 'web'
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+variables:
+  VERBOSE:
+    value: ''
+    description: Set to '1' for more details in e.g., `make` (default is off)
+  DEBUG:
+    value: ''
+    description: Set to '1' for a debug build (default is off)
+
+default:
+  image: 129.192.71.160:5000/builder # TODO too fat
+  before_script:
+    - export VERBOSE=$([[ $VERBOSE != 1 ]] || echo 1)
+    - export DEBUG=$([[ $DEBUG != 1 ]] || echo 1)
+  tags: [bigdata]
+
+test:
+  stage: test
+  script:
+    - env | sort
+    - ./autogen
+    - ./configure ${DEBUG:+--enable-debug}
+    - make -j check ${VERBOSE:+V=1}
