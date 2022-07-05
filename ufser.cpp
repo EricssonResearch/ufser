@@ -1634,6 +1634,10 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         value.remove_prefix(5);
         return {"b", false};
     }
+    if (value.starts_with("null")) {
+        value.remove_prefix(4);
+        return { "", false };
+    }
     if (value.substr(0, 5)=="error") {
         value.remove_prefix(5);
         skip_whitespace(value);

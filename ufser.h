@@ -105,8 +105,8 @@
 * Void-like types
 * ===============
 *
-* For the type of `void` (and the Python `None` value) the type string and serialized value bytes are
-* both of zero len. A few other types behave like this, we call them void-like:
+* For the type of `void` (and the Python `None` value or JSON's 'null') the type string and serialized
+* value bytes are both of zero len. A few other C++ types behave like this, we call them void-like:
 * - Empty tuples. Or tuples containing only void-like types.
 * - Zero-length `std::array`s (or C arrays) or `std::array`s (or C arrays) of void-like types.
 * - Lists of void-like types.
@@ -6154,7 +6154,7 @@ inline void skip_whitespace(std::string_view &value)
  *              from this view as we progress.
  * @param liberal If true, then heterogeneous lists (and maps) will be converted to any values.
  * @returns the type of the parsed string and false or an error string and true.
- *         We dont throw in this function.*/
+ *          We dont throw (uf::error derived exceptions) in this function, but return an error instead.*/
 std::pair<std::string, bool> parse_value(std::string &to, std::string_view &value, bool liberal);
 /** @} */
 
