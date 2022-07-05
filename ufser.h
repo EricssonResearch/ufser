@@ -1437,7 +1437,7 @@ struct has_size_member<T, std::void_t<decltype(std::declval<T>().size())>> : std
 template <typename T, typename = void>
 struct has_reserve_member : std::false_type {};
 template<typename T>
-struct has_reserve_member<T, std::void_t<decltype(std::declval<T>().size(size_t(0)))>> : std::true_type {};
+struct has_reserve_member<T, std::void_t<decltype(std::declval<T>().reserve(size_t(0)))>> : std::true_type {};
 
 using std::begin;
 using std::end;
