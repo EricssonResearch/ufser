@@ -4,6 +4,10 @@ AC_CONFIG_MACRO_DIRS([m4])
 AM_INIT_AUTOMAKE([-Wall foreign subdir-objects -Wno-portability])
 AM_SILENT_RULES([yes])
 
+: ${CXXFLAGS=""}
+AC_PROG_CXX
+LT_INIT
+
 UF_CPPFLAGS=
 UF_CXXFLAGS="-std=c++20 -ggdb3 -Wall -Wextra -Wswitch-enum"
 
@@ -48,9 +52,6 @@ AS_IF([test "$enable_benchmark"],
        AC_LANG_POP
       ])
 AM_CONDITIONAL([NEED_BM], [test "$enable_benchmark" = yes])
-
-AC_PROG_CXX
-LT_INIT
 
 AC_SUBST([AM_CPPFLAGS], [$UF_CPPFLAGS])
 AC_SUBST([AM_CXXFLAGS], [$UF_CXXFLAGS])
