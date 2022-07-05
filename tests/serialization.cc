@@ -620,7 +620,7 @@ void TC(T t, U u, uf::serpolicy policy)
     //Test that if we convert t to U in serialized form we get the same as in the first step
     if constexpr (should_with_content && check_equality_op::has<U>::value)
         CHECK_MESSAGE(u == at.convert_to<U>(policy).template get_as<U>(uf::allow_converting_none),
-                      uf::concat("u=", u, " other=", at.convert_to<U>(policy).template get_as<U>(uf::allow_converting_none)));
+                      uf::concat("u=", uf::serialize_print(u), " other=", uf::serialize_print(at.convert_to<U>(policy).template get_as<U>(uf::allow_converting_none))));
 }
 
 //Test the convertibility of conversion with the given policy only
@@ -1630,4 +1630,89 @@ TEST_CASE("JSON") {
     uf::any a;
     REQUIRE_NOTHROW(a.assign(uf::from_text, json));
     CHECK(a.print_json()==json);
+}
+
+TEST_CASE("tuple<->list") {
+    struct S { 
+        int i; 
+        double d; 
+        auto tuple_for_serialization() const noexcept { return std::tie(i, d); }
+        auto tuple_for_serialization()       noexcept { return std::tie(i, d); }
+    };
+    using V = std::vector<int>;
+    TCO<true>(S{ 0,1 }, V{ 0,1 }, uf::allow_converting_double | uf::allow_converting_tuple_list);
+    TCO<true>(std::pair{ 0,1. }, V{ 0,1 }, uf::allow_converting_double | uf::allow_converting_tuple_list);
+    TCO<true>(std::array<int,2>{ 0, 1 }, V{ 0,1 }, uf::allow_converting_tuple_list);
+    TCO<true>(std::array<double, 2>{ 0, 1 }, V{ 0,1 }, uf::allow_converting_double | uf::allow_converting_tuple_list);
+
+    //a few tests with C style arrays manually. (Cannot use TC as it uses get_as<U>, which cannot return int[2].
+    int i[2] = { 0,1 }, i1[1], i3[3];
+    uf::any avi(V{ 0,1 });
+    CHECK_THROWS(avi.get<int[2]>(i, uf::allow_converting_none));
+    CHECK_NOTHROW(avi.get<int[2]>(i, uf::allow_converting_tuple_list));
+    CHECK_THROWS(avi.get<int[1]>(i1, uf::allow_converting_tuple_list));
+    CHECK_THROWS(avi.get<int[3]>(i3, uf::allow_converting_tuple_list));
+    avi.assign<int[2]>(i);
+    V vi;
+    CHECK_THROWS(avi.get(vi, uf::allow_converting_none));
+    CHECK_NOTHROW(avi.get(vi, uf::allow_converting_tuple_list));
+
+    double d[2] = { 0,1 };
+    avi.assign(V{ 0,1 });
+    CHECK_THROWS(avi.get<double[2]>(d, uf::allow_converting_none));
+    CHECK_THROWS(avi.get<double[2]>(d, uf::allow_converting_tuple_list));
+    CHECK_NOTHROW(avi.get<double[2]>(d, uf::allow_converting_tuple_list | uf::allow_converting_double));
+    avi.assign<double[2]>(d);
+    CHECK_THROWS(avi.get(vi, uf::allow_converting_none));
+    CHECK_THROWS(avi.get(vi, uf::allow_converting_tuple_list));
+    CHECK_NOTHROW(avi.get(vi, uf::allow_converting_tuple_list | uf::allow_converting_double));
+
+    /* Now the 'converting away void members' part.
+        Previously in uFunctions
+        a tuple t2Xli could be converted to li if 'X' has a value and is therefore
+        void. That is, tuple members that are void can be 'converted away'.
+
+        This leads to an ambiguity with the ability to convert tuples to lists.
+        How shall we convert 't2Xli' to 'la'?
+        - According to the old strategy we shall check if 'X' is void and then
+          convert the second member of the tuple 'li' to 'la' by wrapping
+          all 'i'nteger members to an 'a'ny.
+        - One can of course convert the members directly, the first 'a' shall be
+          the first element in the resulting list (even if it is void) and the
+          second 'li' member shall be the second.
+
+        Since most people expect the tuple<->list conversion to go from member
+        to member, we adopt the second behaviour whenever the policy includes
+        'allow_converting_tuple_list' and the first one when it doesn't.
+    */
+    using VA = std::vector<uf::any>;
+    using t2Xli_t = std::pair<uf::expected<void>, std::vector<int>>;
+    t2Xli_t t2Xli{ {}, {1,2} };
+    TCO<true>(t2Xli, V{ 0,1 }, uf::allow_converting_expected);
+    TCO<true>(t2Xli, VA{ uf::any(0), uf::any(1) }, uf::allow_converting_expected | uf::allow_converting_any);
+    TCO<true>(t2Xli, VA{ uf::any(uf::expected<void>{}), uf::any(V{1,2}) }, uf::allow_converting_tuple_list | uf::allow_converting_any);
+
+    //Some examples for users
+    struct T {
+        int i;
+        double d;
+        std::string s;
+        auto tuple_for_serialization() const noexcept { return std::tie(i, d, s); }
+        auto tuple_for_serialization()       noexcept { return std::tie(i, d, s); }
+    };
+    T t1 = { 42,3.14,"abc" };
+    CHECK(uf::serialize_print(t1)==R"((42,3.14,"abc"))");
+    uf::any at(t1);
+    VA va = at.get_as<VA>();
+    CHECK(uf::serialize_print(va)==R"([<i>42,<d>3.14,<s>"abc"])");
+    va[2].assign("def");
+    CHECK(uf::serialize_print(va)==R"([<i>42,<d>3.14,<s>"def"])");
+    uf::any ava(va);
+    T t2 = ava.get_as<T>();
+    CHECK(uf::serialize_print(t2)==R"((42,3.14,"def"))");
+    va[2].assign(3.14);
+    CHECK(uf::serialize_print(va)==R"([<i>42,<d>3.14,<d>3.14])");
+    ava.assign(va);
+    CHECK_THROWS_WITH(ava.get(t2), "Type mismatch when converting <la(*d)> to <t3id*s>");
+    CHECK(uf::serialize_print(t2)==R"((42,3.14,"def"))");
 }

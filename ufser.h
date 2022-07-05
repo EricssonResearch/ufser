@@ -646,6 +646,22 @@
 * The uf::serpolicy enum can be used to govern what conversions are allowed. See its documentation for
 * details.
 * 
+* Note on void-like tuple members. Sometimes a tuple member may become void-like during 
+* conversion. E.g., t2Xi will happily convert to 'i' if the 'X' holds a value (void).
+* (If the policy includes 'allow_converting_expected'.)
+* The pathological case of t2Xli will therefore happily convert to 'li' with 'allow_converting_expected',
+* but also to 'la' with 'allow_converting_expected' and 'allow_converting_any' - by wrapping the
+* integers in the list to an uf::any.
+* On the other hand, if you include 'allow_converting_tuple_list', then t2Xli will be converted to a 
+* list member-by-member. This results in a list that has always the same number of elements as many
+* members the tuple had. That is, it will include an uf::any holding a uf::expected<void> and a second
+* uf::any holding a std::vector<int>. (Note that std::tuple<std::monospace,int,int> counts as two
+* members, since std::monospace is known to be void-like already during compilation, so its type is
+* 't2ii' and will convert to a list of two elements.) The above also means that 't2Xli' will not 
+* convert to 'li' if 'allow_converting_tuple_list' is specified ('allow_converting_all' will also 
+* include it), because member-by-member conversion fails as none of the tuple's members can be 
+* converted to an integer.
+* 
 * Error handling
 * ==============
 * 
@@ -2540,9 +2556,11 @@ enum serpolicy : unsigned char
     allow_converting_any = 32,
     /** Convert s to lc. void to oT. Maybe others will be added in the future.*/
     allow_converting_aux = 64,
+    /** Convert tuples to lists and back. ('tuples' also include std::pair,
+     * std::array, C-style arrays and structs, as well.) */
+    allow_converting_tuple_list = 128,
     /** All conversions allowed*/
-    allow_converting_all = 127
-    //TODO add allow_converting_list_tuple = 128;
+    allow_converting_all = 255
 };
 
 constexpr serpolicy operator | (serpolicy a, serpolicy b) { return serpolicy(((unsigned char)a)|((unsigned char)b)); }
@@ -2570,6 +2588,7 @@ inline std::string to_string(uf::serpolicy convpolicy)
         if (convpolicy&uf::allow_converting_expected) ret += "expected|";
         if (convpolicy&uf::allow_converting_any) ret += "any|";
         if (convpolicy&uf::allow_converting_aux) ret += "aux|";
+        if (convpolicy&uf::allow_converting_tuple_list) ret += "tuple_list|";
         ret.pop_back();
     }
     ret = "convert:" + ret;
@@ -5060,6 +5079,73 @@ inline std::unique_ptr<value_error> deserialize_convert_from_helper(bool &can_di
     return {};
 }
 
+//guaranteed that the incoming type is lX
+//source_type points to the list element data: l*X
+template <bool view, typename ...TT, typename ...tags> //tuples, not including empty
+inline std::unique_ptr<value_error> deserialize_convert_from_helper_from_list(bool& can_disappear, deserialize_convert_params& p, const char* source_type, std::tuple<TT...>& t, tags... tt) {
+    if constexpr (std::tuple_size_v<typename std::tuple<TT...>> == 0) {
+        //nothing, convert incoming can_disappear to outgoing
+        return {};
+    } else {
+        //We dont really care if the incoming list elements can disappear. We try deserializing them into
+        //the tuple members and that is it.
+        bool loc_can_disappear;
+        if (source_type) p.type = source_type;
+        if (auto ret = deserialize_convert_from<view>(loc_can_disappear, p, std::get<0>(t), tt...))
+            return ret; //I hope we get RVO here
+        can_disappear &= loc_can_disappear;
+        auto t2 = tuple_tail(t);
+        return deserialize_convert_from_helper_from_list<view>(can_disappear, p, source_type, t2, tt...);
+        //on success we will have p.type point to after the list: lX*
+    }
+}
+
+//guaranteed that the incoming type is lX
+//source_type points to the list element data: l*X
+template <bool view, typename ...TT, typename ...tags> //tuples
+inline std::unique_ptr<value_error> deserialize_convert_from_helper_from_list(bool& can_disappear, deserialize_convert_params& p, const char* source_type, std::tuple<TT...>&& t, tags... tt) {
+    return deserialize_convert_from_helper_from_list<view>(can_disappear, p, source_type, t, tt...); //call lvalue-ref version
+}
+
+//guaranteed that the incoming type is lX
+//source_type points to the list element data: l*X
+template <bool view, typename A, typename B, typename ...tags> //pair
+inline std::unique_ptr<value_error> deserialize_convert_from_helper_from_list(bool& can_disappear, deserialize_convert_params& p, const char* source_type, std::pair<A, B>& t, tags... tt) {
+    //do them as two-element tuples
+    return deserialize_convert_from_helper_from_list<view>(can_disappear, p, source_type, std::tie(
+        const_cast<typename std::add_lvalue_reference<typename std::remove_const<A>::type>::type>(t.first),
+        t.second), //remove const needed for maps   
+        tt...);
+}
+
+//guaranteed that the incoming type is lX
+//source_type points to the list element data: l*X
+template <bool view, typename T, size_t L, typename ...tags>
+inline std::unique_ptr<value_error> deserialize_convert_from_helper_from_list(bool& can_disappear, deserialize_convert_params& p, const char* source_type, std::array<T, L>& o, tags... tt) {
+    can_disappear = true;
+    bool loc_can_disappear;
+    for (T& t : o) {
+        p.type = source_type;
+        if (auto ret = deserialize_convert_from<view>(loc_can_disappear, p, t, tt...)) return ret;
+        else can_disappear &= loc_can_disappear;
+    }
+    return {};
+}
+
+//guaranteed that the incoming type is lX
+//source_type points to the list element data: l*X
+template <bool view, typename T, size_t L, typename ...tags>
+inline std::unique_ptr<value_error> deserialize_convert_from_helper_from_list(bool& can_disappear, deserialize_convert_params& p, const char* source_type, T(&o)[L], tags... tt) {
+    can_disappear = true;
+    bool loc_can_disappear;
+    for (T& t : o) {
+        p.type = source_type;
+        if (auto ret = deserialize_convert_from<view>(loc_can_disappear, p, t, tt...)) return ret;
+        else can_disappear &= loc_can_disappear;
+    }
+    return {};
+}
+
 //guaranteed that the incoming type is not 'o'
 template <bool view, typename T, typename ...tags>
 inline std::unique_ptr<value_error> deserialize_convert_from_helper(bool &can_disappear, deserialize_convert_params &p, std::unique_ptr<T> &pp, tags... tt) {
@@ -5140,6 +5226,21 @@ constexpr bool ATTR_PURE__ is_all_any(std::string_view type)
         return true;
     }
 }
+
+template <typename T>
+constexpr int tuple_size = -1;
+
+template <typename ...TT>
+constexpr int tuple_size<std::tuple<TT...>> = sizeof...(TT);
+
+template <typename A, typename B>
+constexpr int tuple_size<std::pair<A,B>> = 2;
+
+template <typename T, size_t L>
+constexpr int tuple_size<std::array<T,L>> = L;
+
+template <typename T, size_t L>
+constexpr int tuple_size<T[L]> = L;
 
 /** Checks if a source type can be deserialized into a target type.
  * If the source value is also available (in serialized form), we can
@@ -5507,7 +5608,32 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                 if (deserialize_from<false>(p.p, p.end, size))
                     return create_des_value_error(p);
                 p.type++;
-                if constexpr (otypestr[0] != 'l') {
+                if constexpr (otypestr[0] == 't') {
+                    if (!(p.convpolicy & allow_converting_tuple_list))
+                        return create_des_type_error(p, allow_converting_tuple_list);
+                    //lX->t<num>XYZ
+                    constexpr int target_tuple_size = tuple_size<T>;
+                    static_assert(target_tuple_size>=0);
+                    if (target_tuple_size!=size)
+                        return create_error_for_des(std::make_unique<uf::value_mismatch_error>(uf::concat("Size mismatch when converting <%1> to <%2> (", size, "!=", target_tuple_size, ").")), &p);
+                    auto [err, ttlen] = parse_type_or_error(p.type, p); //parse
+                    if (err) return std::move(err);
+                    const char* end_of_incoming = p.type + ttlen;
+                    //Create a copy, where tend is replaced by end_of_incoming.
+                    //We dont want to read beyond the incoming tuple's type
+                    deserialize_convert_params local_p(p, end_of_incoming, p.target_tend);
+                    //step over the tNUM in p.target_type
+                    local_p.target_type++;
+                    while (local_p.target_type < local_p.target_tend &&
+                            '0' <= *local_p.target_type && *local_p.target_type <= '9') //note p.target_type is null terminated
+                        local_p.target_type++;
+                    if (auto r = deserialize_convert_from_helper_from_list<view>(can_disappear, local_p, p.type, o, tt...))
+                        return r;
+                    p.type = local_p.type;
+                    p.target_type = local_p.target_type;
+                    p.p = local_p.p;
+                    return {};
+                } else if constexpr (otypestr[0] != 'l') {
                     //lT->void must happen
                     if (size) {
                         std::monostate t;
@@ -5640,8 +5766,47 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                 if (err) return std::move(err);
                 const char *end_of_incoming = p.type + ttlen;
                 p.type++;
-                while (p.type < p.tend && '0' <= *p.type && *p.type <= '9')
+                uint32_t size = 0;
+                while (p.type < p.tend && '0' <= *p.type && *p.type <= '9') {
+                    size = size*10 + *p.type - '0';
                     p.type++;
+                }
+                std::unique_ptr<value_error> ret;
+                if constexpr (otypestr[0] == 'l') { 
+                    //This is t<num>XYZ->lX
+                    if (p.convpolicy & allow_converting_tuple_list) { 
+                        //Create a copy, where tend is replaced by end_of_incoming.
+                        //We dont want to ready beyond the incoming tuple's type
+                        deserialize_convert_params local_p(p, end_of_incoming, p.target_tend);
+                        typename deserializable_value_type<T>::type e;
+                        o.clear();
+                        if constexpr (has_reserve_member<T>::value) o.reserve(size);
+                        const char* const original_target_type = local_p.target_type+1; //+1 step over 'l' in target type
+                        can_disappear = true;
+                        bool loc_can_disappear;
+                        while (size--) {
+                            local_p.target_type = original_target_type;
+                            ret = deserialize_convert_from<view>(loc_can_disappear, local_p, e, tt...);
+                            if (ret) break;
+                            else can_disappear &= loc_can_disappear;
+                            add_element_to_container(o, std::move(e));
+                        }
+                        if (!ret) {
+                            p.p = local_p.p;
+                            p.type = local_p.type;
+                            p.target_type = local_p.target_type;
+                            return {};
+                        }
+                        //else we could not convert member-by-member, try converting void-like members away - but keep the error we have here.
+                    } // else if policy does not allow, we attempt to 'convert void-like members away', see below                    
+                } 
+                //Here we may have 'ret' set if policy allows tuple->list and we attempted member-by-member conversion
+                //to the list element type and failed. In this case we attempt to convert void-like members away, e.g.,
+                //t2Xli->li fill fail the member-by-member, as 'X' will never convert to 'i'. In that case we try to convert
+                //(below) X to i *or nothing*, the latter of which may succeed if 'X' contains a value (which is void) and then
+                //we can simply copy the second member of the tuple to the outgoing 'li'. However, if we cannot, because
+                //the tuple is, e.g., t2ss (nothing to convert to 'li') we shall emit the error we have generated during the 
+                //member-by-member conversion as the user is likely expecting that.
                 //Create a copy, where tend is replaced by end_of_incoming.
                 //We dont want to ready beyond the incoming tuple's type
                 deserialize_convert_params local_p(p, end_of_incoming, p.target_tend);
@@ -5652,10 +5817,10 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                            '0' <= *local_p.target_type && *local_p.target_type <= '9') //note p.target_type is null terminated
                         local_p.target_type++;
                     if (auto r = deserialize_convert_from_helper<view>(can_disappear, local_p, o, tt...))
-                        return r;
-                } else {
+                        return ret ? std::move(ret) : std::move(r);
+                } else { // the otypestr[0] == 'l' case arrives here, when the policy does not allow tuple<->list conversions
                     if (auto r = deserialize_convert_from_helper<view>(can_disappear, local_p, std::tie(o), tt...)) //do the backtracking thingy with 1 elemen tuple
-                        return r;
+                        return ret ? std::move(ret) : std::move(r);
                 }
                 //Save the result back
                 p.p = local_p.p;
@@ -5681,8 +5846,8 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
             case 'd':
                 //T->T is already handled. Now handle numeric conversions
                 if constexpr (otypestr[0] == 'b' || otypestr[0] == 'c' ||
-                                otypestr[0] == 'i' || otypestr[0] == 'I' ||
-                                otypestr[0] == 'd')
+                              otypestr[0] == 'i' || otypestr[0] == 'I' ||
+                              otypestr[0] == 'd')
                     return deserialize_convert_from_helper<view>(can_disappear, p, o); //handles the case of o==tuple<int>, primitive types ignore tags
                 //Here we have {bciId}->non-{bciId}
                 //{bciId}->xT/oT already handled

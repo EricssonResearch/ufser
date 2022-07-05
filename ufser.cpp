@@ -559,6 +559,32 @@ std::unique_ptr<uf::value_error> uf::impl::cant_convert(deserialize_convert_para
             if constexpr (has_source) if (auto err = advance_source(p, target, p.type)) return err;  //leave p.type unchanged, but copy value as is if there is a target
             p.type++;
             goto step1_1_return_true;
+        } else if (c == 't') {
+            if (!(p.convpolicy & allow_converting_tuple_list))
+                return create_des_type_error(p, allow_converting_tuple_list);
+            //lX->tXYZ special case
+            p.type++;
+            p.target_type++;
+            uint32_t size = 0;
+            while (p.target_type<p.target_tend && '0' <= *p.target_type && *p.target_type <= '9') {
+                size = size * 10 + *p.target_type - '0';
+                p.target_type++;
+            }
+            if (size<2) return create_des_typestring_target(p, ser_error_str(ser::num));
+            if constexpr (has_source) {
+                uint32_t size2;
+                if (deserialize_from<false>(p.p, p.end, size2))
+                    return create_des_value_error(p);
+                if (size!=size2)
+                    return create_error_for_des(std::make_unique<uf::value_mismatch_error>(uf::concat("Size mismatch when converting <%1> to <%2> (", size2, "!=", size, ").")), &p);
+            }
+            const char* const save_type = p.type; //the location of the list type : "l*<type>"
+            while (size--) {
+                p.type = save_type;
+                if (auto err = cant_convert<has_source, has_target>(p, target)) 
+                    return err;
+            }
+            return {};
         } else { //use else to create new scope to be able to declare local variables.
             //Create a limited local_p: target set to void if it is not a list
             deserialize_convert_params local_p(p, p.tend, (c != 'l') ? p.target_type : p.target_tend);
@@ -730,6 +756,24 @@ std::unique_ptr<uf::value_error> uf::impl::cant_convert(deserialize_convert_para
             }
             if (size2<2) return create_des_typestring_target(p, ser_error_str(ser::num));
         }
+        std::unique_ptr<value_error> ret;
+        if (c == 'l' && (p.convpolicy & allow_converting_tuple_list)) {
+            const char* const save_target_type = p.target_type+1; //jump over the 'l' in the target type
+            p.type = local_p.type; //jump over the tuple number in the source type
+            if constexpr (has_target) {
+                char buff[4]; char* pp = buff;
+                serialize_to(uint32_t(size1), pp);
+                *target << std::string(buff, 4);
+            }
+            while (size1--) {
+                p.target_type = save_target_type;
+                ret = cant_convert<has_source, has_target>(p, target);
+                if (ret) break;
+            }
+            if (!ret) return {};
+            //else we try converting void-like members away - but in case of failure of that we emit the error generated here
+            //as the user is likely to expect this error.
+        } //else if the target is a list, but allow_converting_tuple_list is not set, we try 'converting away' some void-like members below.
         //Try deserializing our elements into t2.
         //Here we may need to do a backtracking thingy.
         //Consider, for example t2ai being converted to i. Conversion is possible if 'a' holds a void.
@@ -738,7 +782,6 @@ std::unique_ptr<uf::value_error> uf::impl::cant_convert(deserialize_convert_para
         //For this we identify backtracking points, where
         //A type could disappear, but did not and come back to this event on failure.
         //We store the backtracking points in a stack (vector).
-        std::unique_ptr<value_error> ret;
         struct backtrack_point
         {
             const char *p;
