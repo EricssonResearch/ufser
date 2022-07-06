@@ -3671,9 +3671,14 @@ struct deserialize_convert_params
                                         tags...) :
         p(_value.data()), end(_value.data() + _value.length()),
         tstart(_type.data()), type(_type.data()), tend(_type.data() + _type.length()),
-        target_tstart(deserialize_type<T, tags...>().data()), target_type(target_tstart),
-        target_tend(target_tstart+deserialize_type<T, tags...>().length()),
-        convpolicy(_convpolicy), prev(_prev), errors(_e), error_pos(_pos) {}
+        target_tstart(_prev ? _prev->target_tstart : deserialize_type<T, tags...>().data()), //for good error reporting use the same target_tstart as in the parent (so that we show the entire target type in error messages)
+        target_type(_prev ? _prev->target_type : target_tstart),                             //...but of course only if _prev is non-null. If so, we simply use the typestring of 'o'
+        target_tend(target_type+deserialize_type<T, tags...>().length()),                    //limit the target type to the length typestring of 'o'
+        convpolicy(_convpolicy), prev(_prev), errors(_e), error_pos(_pos) 
+    {
+        //verify that the original target_type continues with the typestring of 'o'
+        assert(_prev==nullptr || std::string_view(_prev->target_type, _prev->target_tend-_prev->target_type).starts_with(deserialize_type<T, tags...>()));
+    }
 };
 
 //Forward declare deserialize_convert_from variants
