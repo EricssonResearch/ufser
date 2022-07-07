@@ -1432,17 +1432,17 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
     }
     //detect numbers. It may be 'NaN', 'Nan(122abc_)', 'inf', 'infinity' case insensitive
     //note that an integer continuing with an 'e' is not always a float: 1ea is parsed as '1' by strtod().
-    const char *d_end = value.begin();
-    const double d = std::strtod(value.begin(), &const_cast<char *&>(d_end));
+    const char *d_end = value.data();
+    const double d = std::strtod(value.data(), &const_cast<char *&>(d_end));
     if (errno==ERANGE) {
         errno = 0;
         return {"Number out-of range for double.", true};
     }
-    if (d_end!=value.begin()) { //OK this is a number - check if integer
+    if (d_end!=value.data()) { //OK this is a number - check if integer
         const bool sign = ('-'==value.front()); //handle sign to be able to cover uint64_t
         //allow hex base with 0x prefix, but not octal with plain 0 prefix. That would confuse people.
         const int base = value.length()>2u+sign && value[sign] == '0' && value[sign+1] == 'x' ? 16 : 10;
-        const char *start = value.begin()+sign, *i_end = start;
+        const char *start = value.data()+sign, *i_end = start;
         const uint64_t i = std::strtoull(start, &const_cast<char *&>(i_end), base);
         if (i_end == d_end) { //same length if interpreted as int or float => this is an int.
             if (sign) {
@@ -1455,7 +1455,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                 return {"Integer out-of range for uint64.", true};
             }
             //an integer
-            value.remove_prefix(i_end-value.begin());
+            value.remove_prefix(i_end-value.data());
             //unsigned integers larger than 0x7fffffff will end up 64-bit integers 'I'
             //This is because we convert between integers as signed and parsing 
             //<I>4'000'000'000 would end up negative otherwise.
@@ -1477,7 +1477,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                 return {"I", false};
             }
         } else {
-            value.remove_prefix(d_end-value.begin());
+            value.remove_prefix(d_end-value.data());
             to.append(8, char(0));
             char *p = &to.front()+to.length()-8;
             serialize_to(d, p);
