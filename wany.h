@@ -1677,8 +1677,10 @@ private:
         //Note: When we assign a value, we copy it, but not its children
         //Any values may have incorrect tlen and vlen and we cannot parse
         //them well for a child. So we correct the tlen and vlen here.
-        if (new_type.as_view().front() == 'a')
-            w.calculate_any_sizes();
+        //Note: since we may copy here and loose parsed children relationships
+        //So it is important to calculate the length for all parsed children in w
+        //because after the copy we will not have them parsed in us.
+        w.calculate_any_sizes();
         switch (parent ? parent->typechar() : 0) {
         case 0: //No parent. Simply clone 'p'
             if (type_changed)

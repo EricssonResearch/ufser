@@ -974,3 +974,27 @@ TEST_CASE("from any_view") {
     CHECK(va.as_any().print()=="<msi>{\"a\":3,\"b\":4}");
     CHECK(a.print()=="<msi>{\"a\":2,\"b\":4}"); //no change
 }
+
+TEST_CASE("lazy size calc") {
+    using VA = std::vector<uf::any>;
+    VA va = { uf::any(1), uf::any(1.1), uf::any("aa") };
+    uf::wview wva(va);
+    CHECK_NOTHROW(wva[2][0].set(uf::wview(va)));
+    uf::any ava;
+    CHECK_NOTHROW(ava = wva.as_any());
+    CHECK(ava.print()==R"(<la>[<i>1,<d>1.1,<la>[<i>1,<d>1.1,<s>"aa"]])");
+}
+
+TEST_CASE("lazy len calc - original") {
+    uf::any jsona(uf::from_text, R"(["a","b",{"x":1,"y":null}])");
+    uf::wview jsonw(uf::from_raw, jsona);
+
+    uf::wview arr{std::vector<uf::any>()};
+    arr.insert_after(-1, uf::wview(uf::any()));
+    arr.insert_after( 0, uf::wview(uf::any()));
+    arr.insert_after( 1, uf::wview(uf::any()));
+    arr[2][0].set(uf::any("c"));
+
+    jsonw[1][0].set(arr);
+    CHECK(jsonw.as_any().as_view().print_json()==R"(["a",[null,null,"c"],{"x":1,"y":null}])");
+}
