@@ -3330,7 +3330,7 @@ inline void serialize_to(const std::tuple<T, TT...> &t, char *&p, tags... tt) no
 { serialize_to(std::get<0>(t), p, tt...);  serialize_to(tuple_tail(t), p, tt...); }
 template <typename T, size_t L, typename ...tags> void serialize_to(const std::array<T, L> &o, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
 { for(auto &t:o) serialize_to(t, p, tt...); }
-template <typename T, size_t L, typename ...tags, typename = std::enable_if_t<!std::is_same_v<char, T>>> void serialize_to(T const (&o)[L], char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, size_t L, typename ...tags, typename> void serialize_to(T const (&o)[L], char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
 { for(auto &t:o) serialize_to(t, p, tt...); }
 template <typename T, typename ...tags> inline void serialize_to(const std::unique_ptr<T> &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
 { serialize_to(bool(pp), p); if (pp) serialize_to(*pp, p, tt...); }
