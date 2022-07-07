@@ -1,7 +1,6 @@
 #pragma once
 #include "ufser.h"
 #include <memory>
-#include <arpa/inet.h>
 #include <map>
 #include <iostream>
 #include <forward_list>
