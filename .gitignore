@@ -1,4 +1,6 @@
 ﻿.vs
+x64/
+ufser.vcxproj.user
 Makefile
 Makefile.in
 aclocal.m4

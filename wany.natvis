@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+    <Type Name="uf::impl::sview&lt;*&gt;::ptr">
+        <DisplayString Condition=" p-&gt;owning">{p-&gt;data_,[p-&gt;length]s} ({p-&gt;length})</DisplayString>
+        <DisplayString Condition="!p-&gt;owning">{p-&gt;ptr_, [p-&gt;length]s} ({p-&gt;length})</DisplayString>
+    </Type>
+    <Type Name="uf::impl::chunk&lt;*&gt;">
+        <DisplayString Condition=" root.p-&gt;owning &amp;&amp; root.p-&gt;writable">{root.p-&gt;data_+off,[len]s}*</DisplayString>
+        <DisplayString Condition="!root.p-&gt;owning &amp;&amp; root.p-&gt;writable">{root.p-&gt;ptr_ +off,[len]s}*</DisplayString>
+        <DisplayString Condition=" root.p-&gt;owning &amp;&amp;!root.p-&gt;writable">{root.p-&gt;data_+off,[len]s}</DisplayString>
+        <DisplayString Condition="!root.p-&gt;owning &amp;&amp;!root.p-&gt;writable">{root.p-&gt;ptr_ +off,[len]s}</DisplayString>
+        <Expand>
+            <Item Name="[size]">len</Item>
+            <Item Name="[addr]">root.p-&gt;owning ? root.p-&gt;data_+off : root.p-&gt;ptr_+off</Item>
+            <IndexListItems>
+                <Size>len</Size>
+                <ValueNode>((root.p-&gt;owning ? root.p-&gt;data_+off : root.p-&gt;ptr_+off)[$i])</ValueNode>
+            </IndexListItems>
+        </Expand>
+    </Type>
+    <Type Name="uf::impl::chunk&lt;*&gt;::ptr">
+        <DisplayString>{*p}</DisplayString>
+        <Expand>
+            <CustomListItems MaxItemsPerView="5000" ExcludeView="Test">
+                <Variable Name="T" InitialValue="p" />
+                <Loop>
+                    <Break Condition="T == nullptr"/>
+                    <Item>*T</Item>
+                    <Exec>T = T-&gt;next.p</Exec>
+                </Loop>
+            </CustomListItems>
+        </Expand>
+    </Type>
+    <Type Name="uf::impl::wview&lt;*&gt;">
+        <DisplayString>Type={tbegin}... Value={vbegin}...</DisplayString>
+        <Expand>
+            <CustomListItems MaxItemsPerView="5000" ExcludeView="Test">
+                <Variable Name="T" InitialValue="tbegin.p" />
+                <Variable Name="TE" InitialValue="tend.p" />
+                <Variable Name="i" InitialValue="0"/>
+                <Loop>
+                    <Break Condition="T == TE"/>
+                    <Item Name="Type {i}">*T</Item>
+                    <Exec>T = T-&gt;next.p</Exec>
+                    <Exec>i++</Exec>
+                </Loop>
+                <Exec>T = vbegin.p</Exec>
+                <Exec>TE = vend.p</Exec>
+                <Exec>i=0</Exec>
+                <Loop>
+                    <Break Condition="T == TE"/>
+                    <Item Name="Value {i}">*T</Item>
+                    <Exec>T = T-&gt;next.p</Exec>
+                    <Exec>i++</Exec>
+                </Loop>
+                <Item Name="children">children</Item>
+            </CustomListItems>
+        </Expand>
+    </Type>
+    <Type Name="uf::impl::wview&lt;*&gt;::ptr">
+        <DisplayString>{*p}</DisplayString>
+        <Expand>
+            <CustomListItems MaxItemsPerView="5000" ExcludeView="Test">
+                <Variable Name="T" InitialValue="tbegin.p" />
+                <Variable Name="TE" InitialValue="tend.p" />
+                <Variable Name="i" InitialValue="0"/>
+                <Loop>
+                    <Break Condition="T == TE"/>
+                    <Item Name="Type {i}">*T</Item>
+                    <Exec>T = T-&gt;next.p</Exec>
+                    <Exec>i++</Exec>
+                </Loop>
+                <Exec>T = vbegin.p</Exec>
+                <Exec>TE = vend.p</Exec>
+                <Exec>i=0</Exec>
+                <Loop>
+                    <Break Condition="T == TE"/>
+                    <Item Name="Value {i}">*T</Item>
+                    <Exec>T = T-&gt;next.p</Exec>
+                    <Exec>i++</Exec>
+                </Loop>
+                <Item Name="children">p-&gt;children</Item>
+            </CustomListItems>
+        </Expand>
+    </Type>
+</AutoVisualizer>
