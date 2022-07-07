@@ -389,6 +389,8 @@ clone_into(typename chunk<has_refc, Allocator>::ptr& into,
     assert(begin);
     assert(begin != end);
     //First create a copy of chunks with merging if possible
+    //Note that 'into' may be in the middle of the 'begin'->'end'
+    //chunk chain, so we will not modify it while creating this copy.
     auto out = begin->clone();
     auto start = out;
     for (auto in = begin->next; in != end; in = in->next)
@@ -1681,6 +1683,8 @@ private:
         //So it is important to calculate the length for all parsed children in w
         //because after the copy we will not have them parsed in us.
         w.calculate_any_sizes();
+        chunk_ptr new_tbegin;
+        bool adjust_type = false;
         switch (parent ? parent->typechar() : 0) {
         case 0: //No parent. Simply clone 'p'
             if (type_changed)
@@ -1695,12 +1699,18 @@ private:
             [[fallthrough]];
         case 't':
             if (type_changed)
-                clone_into<has_refc, Allocator>(tbegin, w.tbegin, w.tend, tend);
+                //Here we cannot yet change tbegin as it may be a part of the
+                //vbegin->vend chunk list. It may happen if we assign a parent of us
+                //to us. In that case our type is part of the parent's value, which 
+                //we clone below.
+                clone_into<has_refc, Allocator>(new_tbegin, w.tbegin, w.tend, tend);
             [[fallthrough]];
         case 'l':
         case 'm':
         case 'e':
             clone_into<has_refc, Allocator>(vbegin, w.vbegin, w.vend, vend);
+            if (new_tbegin)
+                tbegin->copy_from(std::move(*new_tbegin));
             assert(check(LOC));
             return *this;
         case 'x':
@@ -1719,11 +1729,15 @@ private:
                 clone_into<has_refc, Allocator>(val->next, w.vbegin, w.vend, vend);
                 assert(check(LOC));
                 return *this;
-            } else if (type_changed) {
-                //Need to restore the parent's type
-                tbegin = parent->tbegin->next;
-                tend = parent->tend;
-            }
+            } else if (type_changed)
+                //Set our type to that of the parent's (after the x or X, latter of which is void)
+                //since we can only change type with a non-'e' 'w' by changing from an 'e'
+                //back to having a value.
+                //However, we do not update our tbegin as of yet, since we may set us to
+                //a parent of us. In that case the type chunk chain is part of w.vbegin->w.vend
+                //and we want to clone that in pristine condition. So here we only set a flag
+                //and do it after cloning 'w'.
+                adjust_type = true;
             [[fallthrough]]; //when setting a value handle same as an optional.
         case 'o':
             //value of optional is parsed as <has_value byte> <value chunks.../error chunks...>
@@ -1733,10 +1747,14 @@ private:
             char c = 1;
             val->assign(std::string_view(&c, 1));
             clone_into<has_refc, Allocator>(val->next, w.vbegin, w.vend, vend);
+            if (adjust_type) { //can only happen for 'x' or 'X'
+                tbegin = parent->tbegin->next;
+                tend = parent->tend;
+            }
             assert(check(LOC));
             return *this;
         }
-            assert(0);
+        assert(0);
         return *this;
     }
 

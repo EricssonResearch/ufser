@@ -998,3 +998,13 @@ TEST_CASE("lazy len calc - original") {
     jsonw[1][0].set(arr);
     CHECK(jsonw.as_any().as_view().print_json()==R"(["a",[null,null,"c"],{"x":1,"y":null}])");
 }
+
+TEST_CASE("parent assign") {
+    using VA = std::vector<uf::any>;
+    VA va = { uf::any(1), uf::any(1.1), uf::any("aa") };
+    uf::wview wva(va);
+    CHECK_NOTHROW(wva[2][0].set(wva));
+    uf::any ava;
+    CHECK_NOTHROW(ava = wva.as_any());
+    CHECK(ava.print()==R"(<la>[<i>1,<d>1.1,<la>[<i>1,<d>1.1,<s>"aa"]])");
+}
