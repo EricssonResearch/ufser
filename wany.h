@@ -368,7 +368,7 @@ public:
         // better use std::ostringstream s; s << (void const *)ptr; s.str();
         //  or even usafge count from root, etc
 
-    std::string __attribute__((noinline)) print() const { return uf::concat('\"', x_escape(as_view()), "\"[", len, is_writable() ? "]*" : "]"); }
+    std::string ATTR_NOINLINE__ print() const { return uf::concat('\"', x_escape(as_view()), "\"[", len, is_writable() ? "]*" : "]"); }
 };
 
 template <bool has_refc, template <typename> typename Allocator>
@@ -2090,7 +2090,7 @@ private:
         append_to<has_refc, Allocator>(ret, vbegin, vend);
         return ret + "]}";
     }
-    std::string __attribute__((noinline)) print() const {
+    std::string ATTR_NOINLINE__ print() const {
         std::string ret = "wv{type: ";
         append_to_print<has_refc, Allocator>(ret, tbegin, tend);
         ret += ", val: ";

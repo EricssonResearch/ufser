@@ -21,7 +21,21 @@
 #include <boost/pfr.hpp>
 #endif
 
+#ifdef __GNUC__
 #define ATTR_PURE__ __attribute__((pure)) 
+#define ATTR_NOINLINE__ __attribute__((noinline)) 
+#else
+#define ATTR_PURE__
+#define ATTR_NOINLINE__
+#include <winsock2.h>
+#pragma comment(lib, "Ws2_32.lib")
+#define htobe32 htonl
+#define htobe64 htonll
+#define be32toh ntohl
+#define be64toh ntohll
+#undef min
+#undef max
+#endif 
 
 /** @defgroup serialization Serialization library
 * @brief Serialization without a schema language for C++ and Python
