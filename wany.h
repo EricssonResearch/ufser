@@ -114,41 +114,41 @@ public:
         /** Create a read-only, non-owning or writeable, owning (latter is default). */
         ptr(std::string_view sv, bool copy = true) {
             void* mem = Allocator<char>().allocate(memsize(sv.length()));
-            p = copy ? new(mem) sview(sv.length(), true, sv.data()) : new(mem) sview(sv);
+            p = copy ? new(mem) sview(sv.length(), sv.data()) : new(mem) sview(sv);
         }
         /** Create a read-only, non-owning or writeable, owning (latter is default). */
         ptr(const char *sv, bool copy = true)
         {
             const size_t len = strlen(sv);
             void* mem = Allocator<char>().allocate(memsize(len));
-            p = copy ? new(mem) sview(len, true, sv) : new(mem) sview(std::string_view(sv, len));
+            p = copy ? new(mem) sview(len, sv) : new(mem) sview(std::string_view(sv, len));
         }
         /** Create a read-only, non-owning or writeable, owning (latter is default). */
         ptr(uint32_t len, const char* sv, bool copy = true) {
             void* mem = Allocator<char>().allocate(memsize(len));
-            p = copy ? new(mem) sview(len, true, sv) : new(mem) sview(std::string_view(sv, len));
+            p = copy ? new(mem) sview(len, sv) : new(mem) sview(std::string_view(sv, len));
         }
         /** Create a writable, non-owning or owning (latter is default). */
         ptr(std::string& ss, bool copy = true) {
             void* mem = Allocator<char>().allocate(memsize(ss.length()));
-            p = copy ? new(mem) sview(ss.length(), true, ss.data()) : new(mem) sview(ss);
+            p = copy ? new(mem) sview(ss.length(), ss.data()) : new(mem) sview(ss);
         }
         /** Create a writable, owning. Always copy. */
         ptr(std::string&& ss) {
             void* mem = Allocator<char>().allocate(memsize(ss.length()));
-            p = new(mem) sview(ss.length(), true, ss.data());
+            p = new(mem) sview(ss.length(), ss.data());
         }
         /** Create a writable, non-owning or owning (latter is default). */
         ptr(char *ss, bool copy = true)
         {
             const size_t len = strlen(ss);
             void* mem = Allocator<char>().allocate(memsize(len));
-            p = copy ? new(mem) sview(len, true, ss) : new(mem) sview(ss);
+            p = copy ? new(mem) sview(len, ss) : new(mem) sview(ss);
         }
         /** Create a writable, non-owning or owning (latter is default). */
         ptr(uint32_t len, char* ss, bool copy = true) {
             void* mem = Allocator<char>().allocate(memsize(len));
-            p = copy ? new(mem) sview(len, true, ss) : new(mem) sview(ss, len);
+            p = copy ? new(mem) sview(len, ss) : new(mem) sview(ss, len);
         }
         /** Create a non-owning, non-writeable from a C string literal. */
         template <uint32_t LEN>
@@ -160,13 +160,13 @@ public:
             p = new(mem) sview(l);
         }
         /** Creates a copy of this string, maybe trimmed & different writable. */
-        ptr clone(uint32_t off_ = 0, uint32_t len_ = -1, bool writable_ = true) const {
+        ptr clone(uint32_t off_ = 0, uint32_t len_ = (uint32_t)-1) const {
             assert(p);
             assert(off_ <= p->length);
             len_ = std::min(len_, p->length - off_);
             ptr ret;
             void* mem = Allocator<char>().allocate(memsize(len_));
-            ret.p = new(mem) sview(len_, writable_, p->data() + off_);
+            ret.p = new(mem) sview(len_, p->data() + off_);
             return ret;
         }
     };
@@ -199,8 +199,8 @@ private:
     explicit sview(std::string_view s) noexcept : length(s.length()), writable(false), owning(false), ptr_(const_cast<char*>(s.data())) {}
     explicit sview(std::string &s) noexcept : length(s.length()), writable(true), owning(false), ptr_(s.data()) {}
     explicit sview(char *c, uint32_t len) noexcept : length(len), writable(true), owning(false), ptr_(c) {}
-    explicit sview(uint32_t l, bool writable_=true, const char *initial_data=nullptr) noexcept
-        : length(l), writable(writable_), owning(true) { if (initial_data && l) memcpy(data_, initial_data, l); }
+    explicit sview(uint32_t l, const char *initial_data=nullptr) noexcept
+        : length(l), writable(true), owning(true) { if (initial_data && l) memcpy(data_, initial_data, l); }
     ~sview() noexcept = default;
 };
 
@@ -317,14 +317,11 @@ public:
     /** Ensure that either it is a non-writable swview or I have it for myself.
      * If read-only is set then it is ensured that the resulting sview will be
      * read-only.*/
-    chunk& unshare(bool read_only=false) & {
+    chunk& unshare() & {
         if (!is_writable()) return *this;
-        if (!root->is_unique()) {
-            root = root.clone(off, len, true);
-            off = 0;
-        }
-        if (read_only)
-            root->make_read_only();
+        if (root->is_unique()) return *this;
+        root = root.clone(off, len);
+        off = 0;
         return *this;
     }
     /** Assigns content to us.
@@ -402,9 +399,9 @@ clone_into(typename chunk<has_refc, Allocator>::ptr& into,
         into = std::move(start);
     else 
         into->copy_from(*start);
-    //Then make the (potentially merged) sviews read-only
+    //Then make the (potentially merged) sviews read-only or single-owner
     for (auto c = into; c!=new_end; c = c->next) 
-        c->unshare(true);
+        c->unshare();
     return out;
 }
 
