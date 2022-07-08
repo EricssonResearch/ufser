@@ -1582,6 +1582,9 @@ constexpr bool is_really_auto_serializable_v =
   && !requires (const T &t) { tuple_for_serialization(t); }                 //any tuple_for_serialization(void) free... 
   && !requires (const T &t) { t.tuple_for_serialization(); };               //...or member fn prevents auto serialization
 
+template <>
+constexpr bool is_really_auto_serializable_v<void> = false;
+
 /** Helper to return an lvalue reference to a type.*/
 template<typename T>
 inline typename std::add_lvalue_reference<T>::type decllval() noexcept {
