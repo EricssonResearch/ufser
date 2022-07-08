@@ -3,6 +3,8 @@
 #include <wany.h>
 #include "tools.h"
 #include <list>
+#include <algorithm>
+#include <random>
 
 using namespace std::string_view_literals;
 
@@ -119,8 +121,8 @@ TEST_CASE_TEMPLATE("wview", wview, uf::wview, uf::gwview, uf::twview) {
     CHECK(std::string(wv2) == uf1_str2);
 
     auto len = wv.flatten_size();
-    CHECK(len == 4 + 4);
-    char buf[len];
+    REQUIRE(len == 4 + 4);
+    char buf[4+4];
     wv.flatten_to(buf);
     CHECK(!strncmp(buf, "\x00\x00\x00\x04""alef", len));
 }
@@ -563,11 +565,14 @@ TEST_CASE_TEMPLATE("wv error", wview, uf::wview, uf::gwview, uf::twview) {
     CHECK(w2.as_any().print() == "<a><s>\"any\"");
 }
 
+std::random_device rd;
+std::mt19937 random_gen(rd());
+
 template <typename wview>
 void random_delete(wview w, std::string_view msg) {
     std::vector<int> indices(w.size());
     iota(indices.begin(), indices.end(), 0);
-    std::random_shuffle(indices.begin(), indices.end());
+    std::shuffle(indices.begin(), indices.end(), random_gen);
     std::string message = uf::concat("random delete (", msg, "): ", Join(indices, ","));
     const int total = indices.size();
     while (indices.size()) {
