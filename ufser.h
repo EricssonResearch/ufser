@@ -4158,6 +4158,7 @@ struct any_view
      *             - characters are printed as a single character string
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+     *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
      *             - errors are printed as string
      *             - tuples are printed as arrays.
      * @returns an empty optional on success; an optional with no error if we have exceeeded the max length and need to be trimmed; or
@@ -4179,6 +4180,7 @@ struct any_view
      *             - characters are printed as a single character string
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+     *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
      *             - errors are printed as string
      *             - tuples are printed as arrays.
      * @returns the textual description. If the string is trimmed, it ends in ...*/
@@ -6263,6 +6265,7 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
  *             - characters are printed as a single character string
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+ *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - errors are printed as string
  *             - tuples are printed as arrays.
  * @param [in] max_len The maximum length, after this the output is trimmed. Zero is unlimited.
@@ -6929,6 +6932,7 @@ convert(std::string_view from_type, std::string_view to_type,
  *             - enumerations are printed as an integer
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+ *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - errors are printed as string
  *             - tuples are printed as arrays
  *             - for 'any' values, we omit the typestring, just print the value.
@@ -6962,6 +6966,7 @@ inline std::string serialize_print(const T& t, bool json_like = false, unsigned 
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - errors are printed as string
+ *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - tuples are printed as arrays.
  *             - for 'any' values, we omit the typestring, just print the value.
  * @param [in] chars Specify a list of characters to also encode as %xx.

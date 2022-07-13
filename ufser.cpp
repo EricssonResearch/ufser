@@ -1218,6 +1218,7 @@ uf::impl::serialize_print_by_type_to(std::string &to, bool json_like, unsigned m
         double d;
         if (deserialize_from<false>(p, end, d)) goto value_mismatch;
         to.append(uf::print_double(d));
+        if (json_like && to.back()=='.') to.pop_back(); //Print integers as integer for JSON
         type.remove_prefix(1);
         break;
     }
