@@ -631,7 +631,7 @@ typename chunk<has_refc, Allocator>::ptr insert_empty_chunk_after(typename chunk
  * but for tuple types, we return the first member.
  * For n>1 we return the concatenated types of the first n members.
  * @returns a human readable text on error.*/
-std::pair<std::string_view, std::string> parse_tuple_type(std::string_view t, int n) {
+inline std::pair<std::string_view, std::string> parse_tuple_type(std::string_view t, int n) {
     if (t.empty()) return{{}, "Empty type."};
     if (n<0) return {{}, uf::concat("Negative number of requested elements: ", n)};
     if (n==0) return {t, {}};
@@ -2198,11 +2198,11 @@ using twview = impl::wview<false, impl::TMonoAllocator>::ptr;
 
 /** Reset the global monotonic allocator, keeping one page allocated (but empty).
  * All uf::gsview and uf::gwview objects become invalid.*/
-void gallocator_reset() noexcept { impl::MonotonicAllocatorBase<impl::MonotonicAllocatorBaseGlobal, impl::page_size>::reset(); }
+inline void gallocator_reset() noexcept { impl::MonotonicAllocatorBase<impl::MonotonicAllocatorBaseGlobal, impl::page_size>::reset(); }
 
 /** Reset the thread_local monotonic allocator, keeping one page allocated (but empty).
  * All uf::tsview and uf::twview objects on this thread become invalid.*/
-void tallocator_reset() noexcept { impl::MonotonicAllocatorBase<impl::MonotonicAllocatorBaseThread, impl::page_size>::reset(); }
+inline void tallocator_reset() noexcept { impl::MonotonicAllocatorBase<impl::MonotonicAllocatorBaseThread, impl::page_size>::reset(); }
 
 } // uf::
 
