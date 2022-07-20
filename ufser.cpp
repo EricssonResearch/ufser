@@ -1401,7 +1401,7 @@ value_mismatch:
 }
 
 
-std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_view &value, bool liberal)
+std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_view &value, TextParseMode mode)
 {
     skip_whitespace(value);
     if (value.length() == 0) return {{}, false};
@@ -1412,11 +1412,19 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
             value.remove_prefix(3);
         } else if (value[1]=='%' && value.length()>=5 && value[4]=='\'' &&
                    hex_digit(value[2])>=0 && hex_digit(value[3])>=0) {
-            to.push_back(hex_digit(value[2])*16 + hex_digit(value[3]));
+            to.push_back((unsigned char)(hex_digit(value[2])*16 + hex_digit(value[3])));
             value.remove_prefix(5);
         } else
             return {"Strange character literal.", true};
-        return {"c", false};
+        if (mode != TextParseMode::JSON) return { "c", false };
+        //JSON: instead of the character have a single byte string
+        char c = to.back();
+        to.back() = 0;
+        to.push_back(0);
+        to.push_back(0);
+        to.push_back(1);
+        to.push_back(c);
+        return {"s", false};
     }
     if (value.front() == '\"') {
         size_t pos = value.find_first_of('\"', 1);
@@ -1440,50 +1448,52 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         return {"Number out-of range for double.", true};
     }
     if (d_end!=value.data()) { //OK this is a number - check if integer
-        const bool sign = ('-'==value.front()); //handle sign to be able to cover uint64_t
-        //allow hex base with 0x prefix, but not octal with plain 0 prefix. That would confuse people.
-        const int base = value.length()>2u+sign && value[sign] == '0' && value[sign+1] == 'x' ? 16 : 10;
-        const char *start = value.data()+sign, *i_end = start;
-        const uint64_t i = std::strtoull(start, &const_cast<char *&>(i_end), base);
-        if (i_end == d_end) { //same length if interpreted as int or float => this is an int.
-            if (sign) {
-                if (errno==ERANGE || i>=(uint64_t(1)<<63)) {
+        if (mode != TextParseMode::JSON) {
+            const bool sign = ('-'==value.front()); //handle sign to be able to cover uint64_t
+            //allow hex base with 0x prefix, but not octal with plain 0 prefix. That would confuse people.
+            const int base = value.length()>2u+sign && value[sign] == '0' && value[sign+1] == 'x' ? 16 : 10;
+            const char* start = value.data()+sign, * i_end = start;
+            const uint64_t i = std::strtoull(start, &const_cast<char*&>(i_end), base);
+            if (i_end == d_end) { //same length if interpreted as int or float => this is an int.
+                if (sign) {
+                    if (errno==ERANGE || i>=(uint64_t(1)<<63)) {
+                        errno = 0;
+                        return { "Integer out-of range for int64.", true };
+                    }
+                } else if (errno==ERANGE) {
                     errno = 0;
-                    return {"Integer out-of range for int64.", true};
+                    return { "Integer out-of range for uint64.", true };
                 }
-            } else if (errno==ERANGE) {
-                errno = 0;
-                return {"Integer out-of range for uint64.", true};
-            }
-            //an integer
-            value.remove_prefix(i_end-value.data());
-            //unsigned integers larger than 0x7fffffff will end up 64-bit integers 'I'
-            //This is because we convert between integers as signed and parsing 
-            //<I>4'000'000'000 would end up negative otherwise.
-            if (i<=0x7fffffffu) { 
-                to.append(4, char(0));
-                char *p = &to.front()+to.length()-4;
-                if (sign)
-                    serialize_to(-int32_t(i), p);
-                else
-                    serialize_to(uint32_t(i), p);
-                return {"i", false};
-            } else {
-                to.append(8, char(0));
-                char *p = &to.front()+to.length()-8;
-                if (sign)
-                    serialize_to(-int64_t(i), p);
-                else
-                    serialize_to(i, p);
-                return {"I", false};
-            }
-        } else {
-            value.remove_prefix(d_end-value.data());
-            to.append(8, char(0));
-            char *p = &to.front()+to.length()-8;
-            serialize_to(d, p);
-            return {"d", false};
-        }
+                //an integer
+                value.remove_prefix(i_end-value.data());
+                //unsigned integers larger than 0x7fffffff will end up 64-bit integers 'I'
+                //This is because we convert between integers as signed and parsing 
+                //<I>4'000'000'000 would end up negative otherwise.
+                if (i<=0x7fffffffu) {
+                    to.append(4, char(0));
+                    char* p = &to.front()+to.length()-4;
+                    if (sign)
+                        serialize_to(-int32_t(i), p);
+                    else
+                        serialize_to(uint32_t(i), p);
+                    return { "i", false };
+                } else {
+                    to.append(8, char(0));
+                    char* p = &to.front()+to.length()-8;
+                    if (sign)
+                        serialize_to(-int64_t(i), p);
+                    else
+                        serialize_to(i, p);
+                    return { "I", false };
+                }
+            } //else fallthrough to double
+        } //else force double
+        //Serialize as double.
+        value.remove_prefix(d_end-value.data());
+        to.append(8, char(0));
+        char* p = &to.front()+to.length()-8;
+        serialize_to(d, p);
+        return { "d", false };
     }
     if (value.front()=='[') {
         value.remove_prefix(1);
@@ -1494,10 +1504,11 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         to.append(4, 0);
         std::string type;
         for (const bool convert_to_any : {false, true}) {
+            if (mode==TextParseMode::JSON && !convert_to_any) continue;
             bool mismatchin_mapped_types = false;
             while (value.length() && value.front()!=']') {
                 const size_t size_before = to.size();
-                auto [t, v] = parse_value(to, value, liberal);
+                auto [t, v] = parse_value(to, value, mode);
                 if (v) return {std::move(t), v};
                 if (convert_to_any) {
                     //insert tlen, typestring, vlen before the value
@@ -1508,7 +1519,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                     serialize_to((uint32_t)vlen, p);
                 } else if (type.length()==0) type = std::move(t);
                 else if (type!=t) {
-                    if (!liberal)
+                    if (mode==TextParseMode::Normal)
                         return {uf::concat("Mismatching types in list: <", type, "> and <", t, ">."), true};
                     mismatchin_mapped_types = true;
                     to.resize(orig_len+4);
@@ -1545,10 +1556,12 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         to.append(4, 0);
         std::string key_type;
         std::string mapped_type;
+        if (mode==TextParseMode::JSON) mapped_type = "a";
         for (const bool convert_to_any : {false, true}) {
+            if (mode==TextParseMode::JSON && !convert_to_any) continue;
             bool mismatchin_mapped_types = false;
             while (value.length() && value.front()!='}') {
-                auto [t, v] = parse_value(to, value, liberal);
+                auto [t, v] = parse_value(to, value, mode);
                 if (v) return {std::move(t), v};
                 if (key_type.length()==0) key_type = std::move(t);
                 else if (key_type!=t) return {uf::concat("Mismatching key types : <", key_type, "> and <", t, ">."), true};
@@ -1558,7 +1571,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                 value.remove_prefix(1);
                 skip_whitespace(value);
                 const size_t size_before = to.size();
-                std::tie(t, v) = parse_value(to, value);
+                std::tie(t, v) = parse_value(to, value, mode);
                 if (v) return {std::move(t), v};
                 if (convert_to_any) {
                     //insert tlen, typestring, vlen before the value
@@ -1570,7 +1583,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                     assert(p == to.data() + size_before + 4+4+t.length());
                 } else if (mapped_type.length()==0) mapped_type = std::move(t);
                 else if (mapped_type!=t) {
-                    if (!liberal)
+                    if (mode==TextParseMode::Normal)
                         return {uf::concat("Mismatching mapped types: <", key_type, "> and <", t, ">."), true};
                     mismatchin_mapped_types = true;
                     to.resize(orig_len+4);
@@ -1604,7 +1617,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         std::string type;
         unsigned num = 0;
         while (value.length() && value.front()!=')') {
-            auto [t, v] = parse_value(to, value, liberal);
+            auto [t, v] = parse_value(to, value, mode);
             if (v) return {std::move(t), v};
             type.append(std::move(t));
             num++;
@@ -1643,7 +1656,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
             value.front()!=';' && value.front()!=',') {
             //it seems the user has specified a value after the type
             std::string raw;
-            auto [type2, v] = parse_value(raw, value, liberal);
+            auto [type2, v] = parse_value(raw, value, mode);
             if (v) return {std::move(type2), v}; //error parsing
             if (type1.empty())
                 a = any(from_type_value_unchecked, std::move(type2), std::move(raw));
@@ -1686,17 +1699,17 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         value.remove_prefix(5);
         skip_whitespace(value);
         if (value.length() == 0 || value.front() != '(') return {"Missing 1-4 elements of error_value", true};
-        auto [inner_type, v] = parse_value(to, value, true); //parse tuple (true: come back here for good error)
+        auto [inner_type, v] = parse_value(to, value, TextParseMode::Liberal); //parse tuple (liberal: come back here for good error)
         if (v) return {std::move(inner_type), v};
         if (inner_type=="s") { //just the type
             std::string_view remaining = "(\"\", \"\", <>)"; //two additional empty strings and one any
-            parse_value(to, remaining, false);  //false=perf opt
+            parse_value(to, remaining, TextParseMode::Normal);  //normal=perf opt
         } else if (inner_type == "t2ss") { //type and id
             std::string_view remaining = "(\"\", <>)"; //an additional empty string and any
-            parse_value(to, remaining, false);  //false=perf opt
+            parse_value(to, remaining, TextParseMode::Normal);  //normal=perf opt
         } else if (inner_type == "t3ssa") { //type, id and message
             std::string_view remaining = "<>"; //an additional any
-            parse_value(to, remaining, false);  //false=perf opt
+            parse_value(to, remaining, TextParseMode::Normal);  //normal=perf opt
         } else if (inner_type!="t4sssa") //also covers the case of error and inner_type being empty
             return {"Error must contain 's', 't2ss', 't3sss' or 't4sssa'.", true}; //error_value must be a t4sssa (or part of it)
         return {"e", false};

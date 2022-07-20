@@ -3472,7 +3472,21 @@ template <bool view, typename T, typename ...tags> bool deserialize_from(const c
 template <bool view, typename T, typename ...tags> bool deserialize_from(const char *&p, const char *end, std::optional<T> &o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::deser))
 { bool h; if (deserialize_from<view>(p, end, h)) return true; if (h) { o.emplace(); if (deserialize_from<view>(p, end, *o, tt...)) return true; } else o.reset(); return false; }
 
-std::pair<std::string, bool> parse_value(std::string &to, std::string_view &value, bool liberal=true);
+enum class TextParseMode {
+    Normal,  ///heterogeneous lists (and maps) will result in an error.
+    Liberal, ///<heterogeneous lists (and maps) will be converted to any values
+    JSON     ///<All lists and map values will be converted to 'any'. All numbers to 'd'. Characters to 's'.
+};
+
+/** Creates a serialized raw bytestring from a textual description, such as
+ * (\"string\";5;[23.2;54.32];'c';\<2si\>(\"xx\";123)).
+ * @param [out] to The string we append our raw output to.
+ * @param value The textual description to parse. We consume characters
+ *              from this view as we progress.
+ * @param mode How to handle and convert certain values.
+ * @returns the type of the parsed string and false or an error string and true.
+ *          We dont throw (uf::error derived exceptions) in this function, but return an error instead.*/
+std::pair<std::string, bool> parse_value(std::string &to, std::string_view &value, TextParseMode mode);
 
 /** Finds the length of a serialized value given its textual type description.
  * @param type The string view containing the type of the serialized value.
@@ -3514,9 +3528,9 @@ std::pair<std::string, bool> parse_value(std::string &to, std::string_view &valu
  * the last chunk. Even if the type is only in one chunk, they will only contain the remainder
  * of the type after the error.*/
 [[nodiscard]] std::unique_ptr<value_error> serialize_scan_by_type_from(std::string_view& type, const char*& p, const char* &end,
-                                                 const std::function<void(std::string_view &)> &more_type,
-                                                 const std::function<void(const char *&, const char *&)> &more_val,
-                                                 bool check_recursively);
+                                                                       const std::function<void(std::string_view&)>& more_type,
+                                                                       const std::function<void(const char*&, const char*&)>& more_val,
+                                                                       bool check_recursively);
 /** Finds the length of a serialized value given its textual type description.
  * @param type The string view containing the type of the serialized value.
  *             As we progress, we consume chars from this string view via
@@ -4287,7 +4301,7 @@ protected:
     explicit any_view(std::string_view t, std::string_view v) noexcept : _type(t), _value(v) {}
     std::string_view _type;
     std::string_view _value;
-    friend std::pair<std::string, bool> impl::parse_value(std::string &to, std::string_view &value, bool liberal);
+    friend std::pair<std::string, bool> impl::parse_value(std::string &to, std::string_view &value, TextParseMode mode);
 };
 
 /** An object that can hold any value and its type.
@@ -4384,8 +4398,11 @@ struct any : any_view
      * @param [in] v The string containing the textual description.
      *               The description may or may not contain a type description
      *               before the value, so \<s\>"aaa" and just "aaa" are both valid.
-     * @returns the created any.*/
-    [[nodiscard]] any(from_text_t, std::string_view v);
+     * @param [in] json_like If true, values (but not keys) for maps and lists are
+     *             always serialized as an 'any'. All numbers converted to 'd'.
+     *             Characters are converted to single char strings.
+    * @returns the created any.*/
+    [[nodiscard]] any(from_text_t, std::string_view v, bool json_like=false);
 
     any &operator=(const any_view &o) { assign(o); return *this; }
     any &operator=(const any &o) { 
@@ -4520,9 +4537,12 @@ struct any : any_view
     /** Set to the value of a textual description
      * @param [in] v The string containing the textual description.
      *               The description may or may not contain a type description
-     *               before the value, so \<s\>"aaa" and just "aaa" are both valid.*/
-    any& assign(from_text_t, std::string_view v) 
-    { return assign(any(from_text, v)); }
+     *               before the value, so \<s\>"aaa" and just "aaa" are both valid.
+     * @param [in] json_like If true, values (but not keys) for maps and lists are 
+     *             always serialized as an 'any'. All numbers converted to 'd'.
+     *             Characters are converted to single char strings. */
+    any& assign(from_text_t, std::string_view v, bool json_like=false)
+    { return assign(any(from_text, v, json_like)); }
 
     /** Set to a type with its default value.
      * @exception uf::typestring error bad typestring (and leaves 'this' unchanged).
@@ -6339,27 +6359,16 @@ inline void skip_whitespace(std::string_view &value)
         value.remove_prefix(p);
 }
 
-/** Creates a serialized raw bytestring from a textual description, such as
- * (\"string\";5;[23.2;54.32];'c';\<2si\>(\"xx\";123)).
- * @param [out] to The string we append our raw output to.
- * @param value The textual description to parse. We consume characters
- *              from this view as we progress.
- * @param liberal If true, then heterogeneous lists (and maps) will be converted to any values.
- * @returns the type of the parsed string and false or an error string and true.
- *          We dont throw (uf::error derived exceptions) in this function, but return an error instead.*/
-std::pair<std::string, bool> parse_value(std::string &to, std::string_view &value, bool liberal);
 /** @} */
 
 
 } //ns impl
 
-inline any::any(from_text_t, std::string_view v)
+inline any::any(from_text_t, std::string_view v, bool json_like)
 {
     if (v.empty()) return;
     std::string_view original = v;
-    bool invalid;
-    std::string t;
-    std::tie(t, invalid) = impl::parse_value(_storage, v);
+    auto [t, invalid] = impl::parse_value(_storage, v, json_like ? impl::TextParseMode::JSON : impl::TextParseMode::Liberal);
     if (invalid) 
         throw value_mismatch_error(uf::concat("Error parsing text: '", original.substr(0, v.data() - original.data()),
                                               '*', v, "': ", t)); //t is an error string if invalid
