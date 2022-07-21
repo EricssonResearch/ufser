@@ -3255,7 +3255,7 @@ template <typename C, typename ...tags> //containers with begin() end() size() c
 constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, size_t>::type
 serialize_len(const C &c, tags... tt)  noexcept(is_noexcept_for<C, tags...>(nt::len)) {
     if constexpr (is_void_like<false, C>::value) return 0;
-    else {size_t ret = 4; for (auto &e : c) ret += serialize_len(e, tt...); return ret;}
+    else {size_t ret = 4; for (auto const&e : c) ret += serialize_len(e, tt...); return ret;}
 }
 template <typename ...tags> inline size_t serialize_len(const std::vector<bool>& c, tags...) noexcept { return 4 + c.size(); }
 template <typename S, typename ...tags>
@@ -3329,7 +3329,7 @@ serialize_to(const E &e, char *&p, tags...) noexcept { serialize_to(uint32_t(e),
 template <typename C, typename ...tags> inline typename std::enable_if<is_serializable_container<C>::value && !is_std_array<C>::value && !has_tuple_for_serialization<false, C, tags...>::value>::type
 serialize_to(const C &c, char *&p, tags... tt) noexcept(is_noexcept_for<C, tags...>(nt::ser)) {
     if constexpr (is_void_like<false, C>::value) return;
-    serialize_to(uint32_t(c.size()), p); for (auto &e : c) serialize_to(e, p, tt...);
+    serialize_to(uint32_t(c.size()), p); for (auto const&e : c) serialize_to(e, p, tt...);
 }
 template <typename ...tags> inline void serialize_to(const std::vector<bool> &c, char *&p, tags...) noexcept
 { serialize_to(uint32_t(c.size()), p); for (bool e : c) serialize_to(e, p); }

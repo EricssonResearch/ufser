@@ -6,6 +6,7 @@
 #include <string_view>
 #include <list>
 #include <span>
+#include <ranges>
 
 using namespace std::string_view_literals;
 
@@ -1752,4 +1753,10 @@ TEST_CASE("tuple<->list") {
     ava.assign(va);
     CHECK_THROWS_WITH(ava.get(t2), "Type mismatch when converting <la(*d)> to <t3id*s>");
     CHECK(uf::serialize_print(t2)==R"((42,3.14,"def"))");
+}
+
+TEST_CASE("ranges") {
+    std::vector w{1,2,3};
+    auto v = w | std::views::transform([](auto x) { return std::to_string(x) + '.'; });// BTW GCC 12 accepts a temporary vector as the LHS
+    CHECK(uf::any(v).print() == R"(<ls>["1.","2.","3."])");
 }
