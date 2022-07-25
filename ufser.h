@@ -6372,9 +6372,11 @@ inline any::any(from_text_t, std::string_view v, bool json_like)
     if (invalid) 
         throw value_mismatch_error(uf::concat("Error parsing text: '", original.substr(0, v.data() - original.data()),
                                               '*', v, "': ", t)); //t is an error string if invalid
-    _storage.insert(0, t);
+    //We will have the value, followed by the type
+    _storage.append(t); //'t' is short, this is likely not a realloc.
     _storage.shrink_to_fit();
-    _set_type_value(t.length());
+    _type = std::string_view(_storage).substr(_storage.size()-t.size(), t.size());
+    _value = std::string_view(_storage).substr(0, _storage.size()-t.size());
 }
 
 namespace impl
