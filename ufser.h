@@ -1066,7 +1066,7 @@ public:
         result.clear();
         return *this;
     }
-    StringViewAccumulator& operator<<(char c) { parts.push_back(c); result.clear(); return *this; }
+    StringViewAccumulator& operator<<(char c) { parts.emplace_back(std::in_place_type<char>, c); result.clear(); return *this; }
     //StringViewAccumulator &operator << (PyObject*o);
     template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T> || std::is_pointer_v<T>>>
     StringViewAccumulator& operator<<(const T& c)
