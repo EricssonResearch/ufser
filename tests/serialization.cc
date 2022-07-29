@@ -1164,7 +1164,7 @@ TEST_CASE("json-like") {
                         std::vector{1, 2, 3}, std::map<std::string, int>{{"a", 1}, {"b", 2}});
     uf::any a(t);
     CHECK(a.print(0, {}, '%', false) == "<t9isdt2bbaodclimsi>(1,\"aa\",42.2,(true,false),<i>23,0.1,'x',[1,2,3],{\"a\":1,\"b\":2})");
-    CHECK(a.print(0, {}, '%', true) == "[1,\"aa\",42.2,[true,false],23,0.1,\"x\",[1,2,3],{\"a\":1,\"b\":2}]");
+    CHECK(a.print(0, {}, '%', true) == "[1,\"aa\",42.200000000000003,[true,false],23,0.10000000000000001,\"x\",[1,2,3],{\"a\":1,\"b\":2}]");
 }
 
 TEST_CASE("Heterogeneous list/map text parsing ") {
@@ -1759,4 +1759,23 @@ TEST_CASE("ranges") {
     std::vector w{1,2,3};
     auto v = w | std::views::transform([](auto x) { return std::to_string(x) + '.'; });// BTW GCC 12 accepts a temporary vector as the LHS
     CHECK(uf::any(v).print() == R"(<ls>["1.","2.","3."])");
+}
+
+TEST_CASE("floating point print") {
+    float f = 216306000004;
+    double d = 216306000004;
+    long double ld = 216306000004;
+    CHECK(uf::print_floating_point(f, false)=="2.1630601e+11");
+    CHECK(uf::print_floating_point(f, true)=="2.16306008e+11");
+    CHECK(uf::print_floating_point(d, false)=="2.16306e+11");
+    CHECK(uf::print_floating_point(d, true)=="216306000004.");
+    CHECK(uf::print_floating_point(ld, false)=="2.16306e+11");
+    CHECK(uf::print_floating_point(ld, true)=="216306000004.");
+
+    CHECK(uf::serialize_print(f, false)=="2.1630601e+11");
+    CHECK(uf::serialize_print(f, true)=="2.16306008e+11");
+    CHECK(uf::serialize_print(d, false)=="2.16306e+11");
+    CHECK(uf::serialize_print(d, true)=="216306000004.");
+    CHECK(uf::serialize_print(ld, false)=="2.16306e+11");
+    CHECK(uf::serialize_print(ld, true)=="216306000004.");
 }

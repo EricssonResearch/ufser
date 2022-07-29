@@ -1320,15 +1320,19 @@ constexpr bool operator == (const char(&s1)[I1], static_string<I0> const &s0) no
 }
 
 
-inline std::string print_double(double d) {
+inline std::string print_floating_point(std::floating_point auto d, bool full_precision) {
     char s[40];
-    snprintf(s, sizeof(s), "%.8g", d);
+    const char* const fmt =
+        std::is_same_v<decltype(d), float> ? (full_precision ? "%.9g" : "%.8g") :
+        std::is_same_v<decltype(d), long double> ? (full_precision ? "%.21Lg" : "%.8Lg") :
+        (full_precision ? "%.17g" : "%.8g");
+    snprintf(s, sizeof(s), fmt, d);
     std::string ret = s;    
     if (ret.find('e') != std::string::npos) return ret; //scientific notation, we are done
     if (ret.find('.') != std::string::npos) //has a dot, remove trailing zeros
         while (ret.size() > 1 && ret.back() == '0')
             ret.pop_back();
-    else if (ret.size() && '0'<=ret.back() && ret.back()<='9') //No dot, but number - append one to indicate double value.
+    else if (ret.size() && '0'<=ret.back() && ret.back()<='9') //No dot, but number - append one to indicate floating point value.
         ret.push_back('.');
     return ret;
 }
@@ -4172,6 +4176,7 @@ struct any_view
      *             - characters are printed as a single character string
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+     *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
      *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
      *             - errors are printed as string
      *             - tuples are printed as arrays.
@@ -4194,6 +4199,7 @@ struct any_view
      *             - characters are printed as a single character string
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+     *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
      *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
      *             - errors are printed as string
      *             - tuples are printed as arrays.
@@ -6103,11 +6109,11 @@ inline bool serialize_print_append(std::string &to, bool /*json_like*/, unsigned
 template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool /*json_like*/, unsigned /*max_len*/, const int64_t &i, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(std::to_string(i)); return false; }
 template <typename ...tags>
-inline bool serialize_print_append(std::string &to, bool /*json_like*/, unsigned /*max_len*/, const float &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_double(d)); return false; }
+inline bool serialize_print_append(std::string &to, bool json_like, unsigned /*max_len*/, const float &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_floating_point(d, json_like)); return false; }
 template <typename ...tags>
-inline bool serialize_print_append(std::string &to, bool /*json_like*/, unsigned /*max_len*/, const double &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_double(d)); return false; }
+inline bool serialize_print_append(std::string &to, bool json_like, unsigned /*max_len*/, const double &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_floating_point(d, json_like)); return false; }
 template <typename ...tags>
-inline bool serialize_print_append(std::string &to, bool /*json_like*/, unsigned /*max_len*/, const long double &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_double(d)); return false; }
+inline bool serialize_print_append(std::string &to, bool json_like, unsigned /*max_len*/, const long double &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_floating_point(d, json_like)); return false; }
 template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::string_view &s, std::string_view chars, char escape_char, tags...)
 { to.reserve(to.length()+s.length()+2); to.push_back('\"'); 
@@ -6285,6 +6291,7 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
  *             - characters are printed as a single character string
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+ *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
  *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - errors are printed as string
  *             - tuples are printed as arrays.
@@ -6943,6 +6950,7 @@ convert(std::string_view from_type, std::string_view to_type,
  *             - enumerations are printed as an integer
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
+ *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
  *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - errors are printed as string
  *             - tuples are printed as arrays
@@ -6977,6 +6985,7 @@ inline std::string serialize_print(const T& t, bool json_like = false, unsigned 
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - errors are printed as string
+ *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
  *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - tuples are printed as arrays.
  *             - for 'any' values, we omit the typestring, just print the value.
