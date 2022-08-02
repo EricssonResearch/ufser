@@ -16,6 +16,7 @@ ltmain.sh
 m4
 missing
 test-driver
+.dirstamp
 .deps/
 .libs/
 Doxyfile
