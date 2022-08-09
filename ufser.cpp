@@ -1609,7 +1609,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         if (key_type.length() && mapped_type.length())
             return {"m"+key_type+mapped_type, false};
         else
-            return {"maa", false}; //could not determine map type
+            return { mode == TextParseMode::JSON ? "msa" : "maa", false}; //could not determine map type
     }
     if (value.front()=='(') {
         value.remove_prefix(1);
