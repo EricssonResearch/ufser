@@ -329,7 +329,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         type.push_back('e');
         return {};
     }
-    return uf::concat("Cannot serialize this value: '", v, "' (to.index=", to.index(), ").");
+    return uf::concat("Cannot serialize this value: '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "' (to.index=", to.index(), ").");
 }
 
 std::string serialize_append(serialize_output_t &to, std::string_view &type, PyObject* v)
