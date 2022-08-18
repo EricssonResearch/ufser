@@ -37,7 +37,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         switch (to.index()) {
         case 0: std::get<0>(to).append(uf::serialize(int64_t(PyLong_AsSsize_t(v)))); break;
         case 1: uf::impl::serialize_to(int64_t(PyLong_AsSsize_t(v)), std::get<1>(to).first); break;
-        case 2: std::get<2>(to) += 8;
+        case 2: std::get<2>(to) += 8; break;
         default: assert(0);
         }
         type.push_back('I');
@@ -122,7 +122,7 @@ std::string serialize_append_guess(serialize_output_t &to,
             switch (to.index()) {
             case 0: std::get<0>(to).resize(std::get<0>(original)); break;
             case 1: std::get<1>(to).first = std::get<1>(original); break;
-            case 2: std::get<2>(to) = std::get<0>(original);
+            case 2: std::get<2>(to) = std::get<0>(original); break;
             default: assert(0);
             }
             Py_ssize_t pos = 0;
@@ -228,7 +228,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         switch (to.index()) {
         case 0: std::get<0>(to).resize(std::get<0>(original)); break;
         case 1: std::get<1>(to).first = std::get<1>(original); break;
-        case 2: std::get<2>(to) = std::get<0>(original);
+        case 2: std::get<2>(to) = std::get<0>(original); break;
         default: assert(0);
         }
         for (unsigned u = 0; u < size; u++) {
@@ -291,7 +291,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         switch (to.index()) {
         case 0: std::get<0>(to).resize(std::get<0>(original)); break;
         case 1: std::get<1>(to).first = std::get<1>(original); break;
-        case 2: std::get<2>(to) = std::get<0>(original);
+        case 2: std::get<2>(to) = std::get<0>(original); break;
         default: assert(0);
         }
         iterator = PyObject_GetIter(v);
