@@ -19,9 +19,45 @@ static void serialize_append_uint32(serialize_output_t& to, uint32_t size)
     }
 }
 
+static PyObject* ABC = nullptr, * ABC_Sequence = nullptr, * ABC_Mapping = nullptr;
+
+//returns false on error
+//note: we take new references to the module and the two classes forever
+//note: if for some reasons 'collections' is not present, we will try loading it every
+//time, which may be slow. This could be protected against by caching any failure to load,
+//but we do not expect this to be often.
+bool ResolveABCNames() {
+    if (!ABC)
+        ABC = PyImport_ImportModule("collections.abc");
+    if (!ABC)
+        return false;
+    if (!ABC_Sequence)
+        ABC_Sequence = PyObject_GetAttrString(ABC, "Sequence");
+    if (!ABC_Sequence)
+        return false;
+    if (!ABC_Mapping)
+        ABC_Mapping = PyObject_GetAttrString(ABC, "Mapping");
+    if (!ABC_Mapping)
+        return false;
+    return true;
+}
+
+bool IsSequence(PyObject* o) { return (ABC_Sequence || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Sequence); }
+bool IsMapping(PyObject* o) { return (ABC_Mapping || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Mapping); }
+
 std::string serialize_append_guess(serialize_output_t &to,
                                    std::string& type, PyObject* v, bool liberal)
 {
+
+    class pyobj {
+        std::unique_ptr<PyObject, void(*)(PyObject*)> p;
+    public:
+        pyobj(PyObject* o = nullptr) noexcept : p{ o, [](PyObject* x) { Py_XDECREF(x); } } {}
+        static pyobj wrap(PyObject* o) noexcept { Py_XINCREF(o); return pyobj(o); }// assumes borrowed references, like PyArg_ParseTuple()
+        operator PyObject* () const noexcept { return p.get(); }
+        explicit operator bool() const noexcept { return bool(p); }
+    };
+    if (v==nullptr) return {};
     if (v==Py_None) return {};
     if (v==Py_False || v==Py_True) {
         switch (to.index()) {
@@ -98,96 +134,119 @@ std::string serialize_append_guess(serialize_output_t &to,
             }
         return {};
     }
-    if (PyDict_Check(v)) {
-        const uint32_t size = PyDict_Size(v);
-        serialize_append_uint32(to, size);
-        if (size==0) {
-            type.append("maa");
+    //Here we do a bit of an optimization for vanilla dicts
+    //For dicts the PyDict_Next() can iterate the dict without allocating new objects
+    //For all other objects supporting the Mapping protocol, we convert them to a 
+    //sequence of (key,value) tuples and iterate the list.
+    //Note: for very large mappables that are iterable, we may be cheaper by using an iterator instead.
+    const bool is_dict = PyDict_Check(v);
+    if (is_dict || IsMapping(v))
+        if (const pyobj items = is_dict ? pyobj::wrap(v) : pyobj(PyMapping_Items(v))) {
+            const uint32_t size = PyMapping_Size(v); //works for anything supporting the mapping protocol
+            serialize_append_uint32(to, size);
+            if (size == 0) {
+                type.append("maa");
+                return {};
+            }
+            std::string key_type;
+            std::string mapped_type;
+            //a saved value to be restored to
+            const std::variant<size_t, char*> original =
+                to.index() == 0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
+                to.index() == 1 ? std::variant<size_t, char*>(std::in_place_index<1>, std::get<1>(to).first) :
+                to.index() == 2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) :
+                std::variant<size_t, char*>(std::in_place_index<0>, 0);
+            const auto Next = is_dict
+                ? [](PyObject* v, Py_ssize_t* pos, Py_ssize_t, PyObject** key, PyObject** value)->bool {
+                    return PyDict_Next(v, pos, key, value);
+                }
+                : [](PyObject* items, Py_ssize_t* pos, Py_ssize_t size, PyObject** key, PyObject** value)->bool {
+                    if (*pos >= size) return false;
+                    PyObject* tuple = PySequence_GetItem(items, *pos); //new reference, no checks.
+                    if (!tuple) return false;
+                    assert(PyTuple_Check(tuple));
+                    assert(PyTuple_Size(tuple) == 2);
+                    *key = PyTuple_GetItem(tuple, 0);
+                    *value = PyTuple_GetItem(tuple, 1);
+                    Py_DECREF(tuple);
+                    ++* pos;
+                    return true;
+            };
+            PyObject* key, * value;
+            bool key_auto = false, mapped_auto = false;
+            bool restart;
+            do {
+                restart = false;
+                //restore 'original'
+                switch (to.index()) {
+                case 0: std::get<0>(to).resize(std::get<0>(original)); break;
+                case 1: std::get<1>(to).first = std::get<1>(original); break;
+                case 2: std::get<2>(to) = std::get<0>(original); break;
+                default: assert(0);
+                }
+                Py_ssize_t pos = 0;
+                while (Next(items, &pos, size, &key, &value)) {
+                    if (key_auto) {
+                        std::string_view p = "a";
+                        auto err = serialize_append(to, p, key);
+                        if (err.length())
+                            return err;
+                } else {
+                        std::string tmp_key_type;
+                        auto err = serialize_append_guess(to, tmp_key_type, key, liberal);
+                        if (err.length())
+                            return err;
+                        if (key_type.length() == 0)
+                            key_type = std::move(tmp_key_type);
+                        else if (key_type != tmp_key_type) {
+                            if (liberal) {
+                                key_auto = true;
+                                key_type = "a";
+                                restart = true;
+                                break;
+                        } else {
+                                return uf::concat("Cannot serialize: non-uniform key types ('", key_type,
+                                                  "' vs. '", tmp_key_type, "') in dict/mapping: '", to_string(v), "'.");
+                            }
+                        }
+                    }
+                    if (mapped_auto) {
+                        std::string_view p = "a";
+                        auto err = serialize_append(to, p, value);
+                        if (err.length())
+                            return err;
+                } else {
+                        std::string tmp_mapped_type;
+                        auto err = serialize_append_guess(to, tmp_mapped_type, value, liberal);
+                        if (err.length())
+                            return err;
+                        if (mapped_type.length() == 0)
+                            mapped_type = std::move(tmp_mapped_type);
+                        else if (mapped_type != tmp_mapped_type) {
+                            if (liberal) {
+                                mapped_auto = true;
+                                mapped_type = "a";
+                                restart = true;
+                                break;
+                        } else {
+                                return uf::concat("Cannot serialize: non-uniform value types ('", mapped_type,
+                                                  "' vs. '", tmp_mapped_type, "') in dict/mapping: '", to_string(v), "'.");
+                            }
+                        }
+                    }
+                }
+            } while (restart);
+            if (key_type.length() == 0)
+                return uf::concat("Cannot serialize: all keys (", PyMapping_Size(v), ") are None in dict/mapping.");
+            if (mapped_type.length() == 0)
+                return uf::concat("Cannot serialize: all values (", PyMapping_Size(v), ") are None in dict/mapping.");
+            type.push_back('m');
+            type.append(key_type);
+            type.append(mapped_type);
             return {};
-        }
-        std::string key_type;
-        std::string mapped_type;
-        //a saved value to be restored to
-        const std::variant<size_t, char*> original =
-            to.index()==0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
-            to.index()==1 ? std::variant<size_t, char*>(std::in_place_index<1>, std::get<1>(to).first) :
-            to.index()==2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) : 
-            std::variant<size_t, char *>(std::in_place_index<0>, 0);
-        PyObject *key, *value;
-        bool key_auto = false, mapped_auto = false;
-        bool restart;
-        do {
-            restart = false;
-            //restore 'original'
-            switch (to.index()) {
-            case 0: std::get<0>(to).resize(std::get<0>(original)); break;
-            case 1: std::get<1>(to).first = std::get<1>(original); break;
-            case 2: std::get<2>(to) = std::get<0>(original); break;
-            default: assert(0);
-            }
-            Py_ssize_t pos = 0;
-            while (PyDict_Next(v, &pos, &key, &value)) {
-                if (key_auto) {
-                    std::string_view p = "a";
-                    auto err = serialize_append(to, p, key);
-                    if (err.length())
-                        return err;
-                } else {
-                    std::string tmp_key_type;
-                    auto err = serialize_append_guess(to, tmp_key_type, key, liberal);
-                    if (err.length())
-                        return err;
-                    if (key_type.length()==0)
-                        key_type = std::move(tmp_key_type);
-                    else if (key_type!=tmp_key_type) {
-                        if (liberal) {
-                            key_auto = true;
-                            key_type = "a";
-                            restart = true;
-                            break;
-                        } else {
-                            return uf::concat("Cannot serialize: non-uniform key types ('", key_type,
-                                              "' vs. '", tmp_key_type, "') in dictionary: '", v, "'.");
-                        }
-                    }
-                }
-                if (mapped_auto) {
-                    std::string_view p = "a";
-                    auto err = serialize_append(to, p, value);
-                    if (err.length())
-                        return err;
-                } else {
-                    std::string tmp_mapped_type;
-                    auto err = serialize_append_guess(to, tmp_mapped_type, value, liberal);
-                    if (err.length())
-                        return err;
-                    if (mapped_type.length()==0)
-                        mapped_type = std::move(tmp_mapped_type);
-                    else if (mapped_type!=tmp_mapped_type) {
-                        if (liberal) {
-                            mapped_auto = true;
-                            mapped_type = "a";
-                            restart = true;
-                            break;
-                        } else {
-                            return uf::concat("Cannot serialize: non-uniform value types ('", mapped_type,
-                                              "' vs. '", tmp_mapped_type, "') in dictionary: '", v, "'.");
-                        }
-                    }
-                }
-            }
-        } while (restart);
-        if (key_type.length()==0)
-            return uf::concat("Cannot serialize: all keys (", PyDict_Size(v), ") are None in dict.");
-        if (mapped_type.length()==0)
-            return uf::concat("Cannot serialize: all values (", PyDict_Size(v), ") are None in dict.");
-        type.push_back('m');
-        type.append(key_type);
-        type.append(mapped_type);
-        return {};
-    }
-    if (PyList_Check(v)) {
-        const uint32_t size = PyList_Size(v);
+        } //else (if items is null) we continue. This may happen if IsMapping(v) is true, but we are still not a map nevertheless.
+    if (PyList_Check(v) || IsSequence(v)) {
+        const uint32_t size = PySequence_Size(v);
         serialize_append_uint32(to, size);
         if (size==0) {
             type.append("la");
@@ -202,7 +261,7 @@ std::string serialize_append_guess(serialize_output_t &to,
             std::variant<size_t, char *>(std::in_place_index<0>, 0);
         for (unsigned u = 0; u<size; u++) {
             std::string tmp_type;
-            auto err = serialize_append_guess(to, tmp_type, PyList_GetItem(v, u), liberal);
+            auto err = serialize_append_guess(to, tmp_type, PySequence_GetItem(v, u), liberal);
             if (err.length())
                 return err;
             if (u==0)
@@ -212,12 +271,12 @@ std::string serialize_append_guess(serialize_output_t &to,
                     goto list_again_as_any;
                 else
                     return uf::concat("Cannot serialize: non-uniform types ('", my_type,
-                                      "' vs. '", tmp_type, "') in list: '", v, "'.");
+                                      "' vs. '", tmp_type, "') in list/sequence: '", to_string(v), "'.");
             }
         }
         if (my_type.length() == 0) {
             if (liberal) goto list_again_as_any;
-            return uf::concat("Cannot serialize: all elements (", PyList_Size(v), ") are None in list.");
+            return uf::concat("Cannot serialize: all elements (", PySequence_Size(v), ") are None in list/sequence.");
         }
         type.push_back('l');
         type.append(my_type);
@@ -233,7 +292,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         }
         for (unsigned u = 0; u < size; u++) {
             std::string_view p = "a";
-            auto err = serialize_append(to, p, PyList_GetItem(v, u));
+            auto err = serialize_append(to, p, PySequence_GetItem(v, u));
             if (err.length())
                 return err;
         }
@@ -560,7 +619,7 @@ std::string serialize_append(serialize_output_t &to, std::string_view &type, PyO
                     std::get<2>(to) += 4;
                 type.remove_prefix(1);
             } else
-                return uf::concat("Cannot serialize '", v, "' as list.");
+                return uf::concat("Cannot serialize '", to_string(v), "' as list.");
             if (len==0) {
                 uint32_t type_len = uf::parse_type(type);
                 if (type_len==0)

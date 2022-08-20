@@ -24,8 +24,13 @@ inline std::string to_string(PyObject *v)
         ret = "null";
     else {
         PyObject* objectsRepresentation = PyObject_Str(v);
-        ret.assign(PyUnicode_AsUTF8String_view(objectsRepresentation));
-        Py_DECREF(objectsRepresentation);
+        if (!objectsRepresentation)
+            objectsRepresentation = PyObject_Repr(v);
+        if (objectsRepresentation)
+            ret.assign(PyUnicode_AsUTF8String_view(objectsRepresentation));
+        else
+            ret = "unprintable";
+        Py_XDECREF(objectsRepresentation);
     }
     return ret;
 }
