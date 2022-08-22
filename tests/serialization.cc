@@ -1119,41 +1119,41 @@ TEST_CASE("number text") {
     std::string_view sv;
 
     sv = "1234567891234567891123455678554";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
     CHECK(err=="Integer out-of range for uint64.");
 
     sv = "-1234567891234567891123455678554";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
     CHECK(err=="Integer out-of range for int64.");
 
     sv = "-a";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
     CHECK(err=="Did not recognize this: '-a'.");
     CHECK(sv=="-a");
 
     sv = ".a";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
     CHECK(err=="Did not recognize this: '.a'.");
     CHECK(sv==".a");
 
     sv = "ABC";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
     CHECK(err=="Did not recognize this: 'ABC'. (Maybe missing '\"' for strings?)");
     CHECK(sv=="ABC");
 
     sv = "1ea";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(!e);
     CHECK(err=="i");
     CHECK(sv=="ea");
 
     sv = "[1ea]";
-    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::TextParseMode::Normal);
+    std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
     CHECK(err=="List items must be separated by ';' or ','.");
     CHECK(sv=="ea]");
@@ -1180,14 +1180,14 @@ TEST_CASE("Heterogeneous list/map text parsing ") {
     for (unsigned u = 0; u<txts.size(); u++) {
         std::string_view value = txts[u];
         std::string to;
-        auto [type, invalid] = uf::impl::parse_value(to, value, uf::impl::TextParseMode::Liberal);
+        auto [type, invalid] = uf::impl::parse_value(to, value, uf::impl::ParseMode::Liberal);
         REQUIRE_FALSE(invalid);
         CHECK(type == types[u]);
         CHECK(uf::print_escaped(to)==values[u]);
         CHECK(uf::serialize_print_by_type(type, to, true)==txts[u]);
         to.clear();
         value = txts[u];
-        std::tie(type, invalid) = uf::impl::parse_value(to, value, uf::impl::TextParseMode::Normal);
+        std::tie(type, invalid) = uf::impl::parse_value(to, value, uf::impl::ParseMode::Normal);
         CHECK(invalid);
         CHECK(type==errors[u]);
     }
@@ -1658,7 +1658,7 @@ TEST_CASE("JSON") {
 
     REQUIRE_NOTHROW(a.assign(uf::from_text, json, true));
     CHECK(a.print_json()==json);
-    CHECK(a.type()=="d");
+    CHECK(a.type()=="i");
 
     json = R"('c')"sv;
     REQUIRE_NOTHROW(a.assign(uf::from_text, json));

@@ -75,14 +75,14 @@ using serialize_output_t = std::variant<
  *                 In index #1, we supply the running pointer and where we started from (for future offsets)
  * @param [out] type The type we determine.
  * @param [in] v The Python object to serialize
- * @param [in] liberal If list or dict elements are of different type (or empty list or dict)
- *                     and 'liberal' is set we create an 'la' object (anywhere in the hieararchy),
- *                     else we return an error.
+ * @param [in] mode If list or dict elements are of different type (or empty list or dict)
+ *                  and 'Liberal' or one of the 'JSON' values are set we create an 'la' object (anywhere in the hieararchy),
+ *                  for 'Normal' we return an error. Integers are converted to double with 'JSON_Strict'.
  * @returns On success, the empty string, on failure an error msg.
  * Also, if a list contains only None elements,
  * we thrown an error. Same if a dict has only None keys or values.*/
 std::string serialize_append_guess(serialize_output_t &to,
-                                   std::string& type, PyObject* v, bool liberal = true);
+                                   std::string& type, PyObject* v, uf::impl::ParseMode mode = uf::impl::ParseMode::Liberal);
 
 /** Attempts to serialize a python variable to a specific type or determine
  * the number of bytes needed.
@@ -115,13 +115,15 @@ inline PyObject *deserialize_as_python(const uf::any_view &value)
 /** Parses through a Python object for serialization or length.
  * @param [in] v The Python object to serialize
  * @param [in] t The typestring to try to match. If empty, we guess the type.
- * @param [in] liberal If true we allow lists and dicts of heterogeneous types via (la and mXa and maX)
+ * @param [in] mode If list or dict elements are of different type (or empty list or dict)
+ *                  and 'Liberal' or one of the 'JSON' values are set we create an 'la' object (anywhere in the hieararchy),
+ *                  for 'Normal' we return an error. Integers are converted to double with 'JSON_Strict'.
  * @param [out] value. The serialized value as allocated string, as into a pre-allocated array or
  *                     just its length. This is the serialized value only not the type.
  * @returns the typestring (extracted from 't' or guessed) We throw a not_serializable_error if the type is a non
- *          serializable type or if liberal is false, and v is a heterogeneous dict or list. We throw an
+ *          serializable type or if mode is 'Normal', and v is a heterogeneous dict or list. We throw an
  *          api_error if the typestring is not a string or None.*/
-inline std::string serialize_as_helper(PyObject* v, std::optional<std::string_view> t, bool liberal,
+inline std::string serialize_as_helper(PyObject* v, std::optional<std::string_view> t, uf::impl::ParseMode mode,
                                        serialize_output_t &value)
 {
     assert(value.index()<=2);
@@ -132,7 +134,7 @@ inline std::string serialize_as_helper(PyObject* v, std::optional<std::string_vi
         if (err.length())
             throw uf::not_serializable_error(std::move(err));
     } else {
-        auto err = serialize_append_guess(value, type, v, liberal);
+        auto err = serialize_append_guess(value, type, v, mode);
         if (err.length())
             throw uf::not_serializable_error(std::move(err));
     }
@@ -143,14 +145,16 @@ inline std::string serialize_as_helper(PyObject* v, std::optional<std::string_vi
 /** Determines how long (and what type) a python object serialized as a certain type would be.
  * @param [in] v The Python object to serialize
  * @param [in] t The typestring to try to match. If empty, we guess the type.
- * @param [in] liberal If true we allow lists and dicts of heterogeneous types via (la and mXa and maX)
+ * @param [in] mode If list or dict elements are of different type (or empty list or dict)
+ *                  and 'Liberal' or one of the 'JSON' values are set we create an 'la' object (anywhere in the hieararchy),
+ *                  for 'Normal' we return an error. Integers are converted to double with 'JSON_Strict'.
  * @returns The length of the value only, not the type, and the typestring (extracted from 't'
  * or guessed) We throw a not_serializable_error or api_error on error. */
 inline std::pair<size_t, std::string>
-serialize_as_len(PyObject* v, std::optional<std::string_view> t, bool liberal)
+serialize_as_len(PyObject* v, std::optional<std::string_view> t, uf::impl::ParseMode mode)
 {
     serialize_output_t value(std::in_place_index<2>, 0);
-    std::string type = serialize_as_helper(v, t, liberal, value);
+    std::string type = serialize_as_helper(v, t, mode, value);
     return { std::get<2>(value), std::move(type) };
 }
 
@@ -158,24 +162,28 @@ serialize_as_len(PyObject* v, std::optional<std::string_view> t, bool liberal)
  *  enough space.
  * @param [in] v The Python object to serialize
  * @param [in] t The typestring to try to match. If empty, we guess the type.
- * @param [in] liberal If true we allow lists and dicts of heterogeneous types via (la and mXa and maX)
+ * @param [in] mode If list or dict elements are of different type (or empty list or dict)
+ *                  and 'Liberal' or one of the 'JSON' values are set we create an 'la' object (anywhere in the hieararchy),
+ *                  for 'Normal' we return an error. Integers are converted to double with 'JSON_Strict'.
  * @param [out] buff This is the 'pre-allocated' buffer we have talked about above.
  * We throw a not_serializable_error or api_error on error. */
-inline void serialize_as_to(PyObject* v, std::optional<std::string_view> t, bool liberal, char* buff)
+inline void serialize_as_to(PyObject* v, std::optional<std::string_view> t, uf::impl::ParseMode mode, char* buff)
 {
     serialize_output_t value(std::in_place_index<1>, buff, buff);
-    serialize_as_helper(v, t, liberal, value);
+    serialize_as_helper(v, t, mode, value);
 }
 
 
 /** Serializes a python object as a certain type.
  * @param [in] v The Python object to serialize
  * @param [in] t The typestring to try to match. If empty, we guess the type.
- * @param [in] liberal If true we allow lists and dicts of heterogeneous types via (la and mXa and maX)
+ * @param [in] mode If list or dict elements are of different type (or empty list or dict)
+ *                  and 'Liberal' or one of the 'JSON' values are set we create an 'la' object (anywhere in the hieararchy),
+ *                  for 'Normal' we return an error. Integers are converted to double with 'JSON_Strict'.
  * We throw a not_serializable_error or api_error on error. */
-inline uf::any serialize_as(PyObject *v, std::optional<std::string_view> t = {}, bool liberal = true)
+inline uf::any serialize_as(PyObject *v, std::optional<std::string_view> t = {}, uf::impl::ParseMode mode = uf::impl::ParseMode::Liberal)
 {
     serialize_output_t value(std::in_place_index<0>);
-    std::string type = serialize_as_helper(v, t, liberal, value);
+    std::string type = serialize_as_helper(v, t, mode, value);
     return { uf::from_type_value, std::move(type), std::move(std::get<0>(value)) };
 }

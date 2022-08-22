@@ -3476,11 +3476,15 @@ template <bool view, typename T, typename ...tags> bool deserialize_from(const c
 template <bool view, typename T, typename ...tags> bool deserialize_from(const char *&p, const char *end, std::optional<T> &o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::deser))
 { bool h; if (deserialize_from<view>(p, end, h)) return true; if (h) { o.emplace(); if (deserialize_from<view>(p, end, *o, tt...)) return true; } else o.reset(); return false; }
 
-enum class TextParseMode {
-    Normal,  ///heterogeneous lists (and maps) will result in an error.
-    Liberal, ///<heterogeneous lists (and maps) will be converted to any values
-    JSON     ///<All lists and map values will be converted to 'any'. All numbers to 'd'. Characters to 's'.
+/** Used when converting to/from text and Python formats.*/
+enum class ParseMode {
+    Normal,      ///<Heterogeneous lists (and maps) will result in an error. No special action during printing.
+    Liberal,     ///<Heterogeneous lists (and map keys/values) will be converted to 'any' values. No special action during printing.
+    JSON_Strict, ///<All lists and map values will be converted to 'any'. All numbers to 'd'. Characters to 's'.
+    JSON_Loose   ///<Same as JSON_Strict, but we keep integers as integers during parsing.
 };
+
+constexpr bool IsJSON(ParseMode m) noexcept { return m == ParseMode::JSON_Strict || m == ParseMode::JSON_Loose; }
 
 /** Creates a serialized raw bytestring from a textual description, such as
  * (\"string\";5;[23.2;54.32];'c';\<2si\>(\"xx\";123)).
@@ -3490,7 +3494,7 @@ enum class TextParseMode {
  * @param mode How to handle and convert certain values.
  * @returns the type of the parsed string and false or an error string and true.
  *          We dont throw (uf::error derived exceptions) in this function, but return an error instead.*/
-std::pair<std::string, bool> parse_value(std::string &to, std::string_view &value, TextParseMode mode);
+std::pair<std::string, bool> parse_value(std::string &to, std::string_view &value, ParseMode mode);
 
 /** Finds the length of a serialized value given its textual type description.
  * @param type The string view containing the type of the serialized value.
@@ -4177,7 +4181,6 @@ struct any_view
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
      *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
-     *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
      *             - errors are printed as string
      *             - tuples are printed as arrays.
      * @returns an empty optional on success; an optional with no error if we have exceeeded the max length and need to be trimmed; or
@@ -4199,7 +4202,6 @@ struct any_view
      *             - characters are printed as a single character string
      *             - void values and empty optionals are printed as 'null'
      *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
-     *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
      *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
      *             - errors are printed as string
      *             - tuples are printed as arrays.
@@ -4307,7 +4309,7 @@ protected:
     explicit any_view(std::string_view t, std::string_view v) noexcept : _type(t), _value(v) {}
     std::string_view _type;
     std::string_view _value;
-    friend std::pair<std::string, bool> impl::parse_value(std::string &to, std::string_view &value, TextParseMode mode);
+    friend std::pair<std::string, bool> impl::parse_value(std::string &to, std::string_view &value, ParseMode mode);
 };
 
 /** An object that can hold any value and its type.
@@ -6292,7 +6294,6 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
- *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - errors are printed as string
  *             - tuples are printed as arrays.
  * @param [in] max_len The maximum length, after this the output is trimmed. Zero is unlimited.
@@ -6375,7 +6376,7 @@ inline any::any(from_text_t, std::string_view v, bool json_like)
 {
     if (v.empty()) return;
     std::string_view original = v;
-    auto [t, invalid] = impl::parse_value(_storage, v, json_like ? impl::TextParseMode::JSON : impl::TextParseMode::Liberal);
+    auto [t, invalid] = impl::parse_value(_storage, v, json_like ? impl::ParseMode::JSON_Loose : impl::ParseMode::Liberal);
     if (invalid) 
         throw value_mismatch_error(uf::concat("Error parsing text: '", original.substr(0, v.data() - original.data()),
                                               '*', v, "': ", t)); //t is an error string if invalid
@@ -6951,7 +6952,6 @@ convert(std::string_view from_type, std::string_view to_type,
  *             - void values and empty optionals are printed as 'null'
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
- *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - errors are printed as string
  *             - tuples are printed as arrays
  *             - for 'any' values, we omit the typestring, just print the value.
@@ -6986,7 +6986,6 @@ inline std::string serialize_print(const T& t, bool json_like = false, unsigned 
  *             - strings will contain backslash escaped backspace, tab, cr, lf, ff, quotation mark and backslash (in addition to 'chars')
  *             - errors are printed as string
  *             - doubles are printed with full precision (so that JSON re-parse gets the same value)
- *             - doubles holding an integer value are printed as integers (omit the ending dot if no decimals)
  *             - tuples are printed as arrays.
  *             - for 'any' values, we omit the typestring, just print the value.
  * @param [in] chars Specify a list of characters to also encode as %xx.

@@ -46,7 +46,7 @@ bool IsSequence(PyObject* o) { return (ABC_Sequence || ResolveABCNames()) && PyO
 bool IsMapping(PyObject* o) { return (ABC_Mapping || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Mapping); }
 
 std::string serialize_append_guess(serialize_output_t &to,
-                                   std::string& type, PyObject* v, bool liberal)
+                                   std::string& type, PyObject* v, uf::impl::ParseMode mode)
 {
 
     class pyobj {
@@ -70,6 +70,16 @@ std::string serialize_append_guess(serialize_output_t &to,
         return {};
     }
     if (PyLong_Check(v)) {
+        if (mode == uf::impl::ParseMode::JSON_Strict) {
+            switch (to.index()) {
+            case 0: std::get<0>(to).append(uf::serialize(double(PyLong_AsSsize_t(v)))); break;
+            case 1: uf::impl::serialize_to(double(PyLong_AsSsize_t(v)), std::get<1>(to).first); break;
+            case 2: std::get<2>(to) += 8; break;
+            default: assert(0);
+            }
+            type.push_back('d');
+            return {};
+        }
         switch (to.index()) {
         case 0: std::get<0>(to).append(uf::serialize(int64_t(PyLong_AsSsize_t(v)))); break;
         case 1: uf::impl::serialize_to(int64_t(PyLong_AsSsize_t(v)), std::get<1>(to).first); break;
@@ -114,7 +124,7 @@ std::string serialize_append_guess(serialize_output_t &to,
     if (PyTuple_Check(v)) {
         if (PyTuple_Size(v)==0) return {}; //void
         if (PyTuple_Size(v)==1)
-            return serialize_append_guess(to, type, PyTuple_GetItem(v, 0), liberal);
+            return serialize_append_guess(to, type, PyTuple_GetItem(v, 0), mode);
         type.push_back('t');
         type.append(std::to_string(PyTuple_Size(v)));
         for (unsigned u = 0; u<PyTuple_Size(v); u++) 
@@ -126,7 +136,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                 type.push_back('a');
             } else {
                 const size_t orig_size = type.size();
-                auto err = serialize_append_guess(to, type, PyTuple_GetItem(v, u), liberal);
+                auto err = serialize_append_guess(to, type, PyTuple_GetItem(v, u), mode);
                 if (err.length())
                     return err;
                 if (type.size() == orig_size)
@@ -145,7 +155,7 @@ std::string serialize_append_guess(serialize_output_t &to,
             const uint32_t size = PyMapping_Size(v); //works for anything supporting the mapping protocol
             serialize_append_uint32(to, size);
             if (size == 0) {
-                type.append("maa");
+                type.append(uf::impl::IsJSON(mode) ? "msa" : "maa");
                 return {};
             }
             std::string key_type;
@@ -155,7 +165,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                 to.index() == 0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
                 to.index() == 1 ? std::variant<size_t, char*>(std::in_place_index<1>, std::get<1>(to).first) :
                 to.index() == 2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) :
-                std::variant<size_t, char*>(std::in_place_index<0>, 0);
+                                  std::variant<size_t, char*>(std::in_place_index<0>, 0);
             const auto Next = is_dict
                 ? [](PyObject* v, Py_ssize_t* pos, Py_ssize_t, PyObject** key, PyObject** value)->bool {
                     return PyDict_Next(v, pos, key, value);
@@ -171,7 +181,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                     Py_DECREF(tuple);
                     ++* pos;
                     return true;
-            };
+                };
             PyObject* key, * value;
             bool key_auto = false, mapped_auto = false;
             bool restart;
@@ -193,13 +203,13 @@ std::string serialize_append_guess(serialize_output_t &to,
                             return err;
                 } else {
                         std::string tmp_key_type;
-                        auto err = serialize_append_guess(to, tmp_key_type, key, liberal);
+                        auto err = serialize_append_guess(to, tmp_key_type, key, mode);
                         if (err.length())
                             return err;
                         if (key_type.length() == 0)
                             key_type = std::move(tmp_key_type);
                         else if (key_type != tmp_key_type) {
-                            if (liberal) {
+                            if (mode != uf::impl::ParseMode::Normal) {
                                 key_auto = true;
                                 key_type = "a";
                                 restart = true;
@@ -217,13 +227,13 @@ std::string serialize_append_guess(serialize_output_t &to,
                             return err;
                 } else {
                         std::string tmp_mapped_type;
-                        auto err = serialize_append_guess(to, tmp_mapped_type, value, liberal);
+                        auto err = serialize_append_guess(to, tmp_mapped_type, value, mode);
                         if (err.length())
                             return err;
                         if (mapped_type.length() == 0)
                             mapped_type = std::move(tmp_mapped_type);
                         else if (mapped_type != tmp_mapped_type) {
-                            if (liberal) {
+                            if (mode != uf::impl::ParseMode::Normal) {
                                 mapped_auto = true;
                                 mapped_type = "a";
                                 restart = true;
@@ -261,21 +271,20 @@ std::string serialize_append_guess(serialize_output_t &to,
             std::variant<size_t, char *>(std::in_place_index<0>, 0);
         for (unsigned u = 0; u<size; u++) {
             std::string tmp_type;
-            auto err = serialize_append_guess(to, tmp_type, PySequence_GetItem(v, u), liberal);
+            auto err = serialize_append_guess(to, tmp_type, PySequence_GetItem(v, u), mode);
             if (err.length())
                 return err;
             if (u==0)
                 my_type = std::move(tmp_type);
             else if (my_type!=tmp_type) {
-                if (liberal)
-                    goto list_again_as_any;
-                else
+                if (mode== uf::impl::ParseMode::Normal)
                     return uf::concat("Cannot serialize: non-uniform types ('", my_type,
                                       "' vs. '", tmp_type, "') in list/sequence: '", to_string(v), "'.");
+                goto list_again_as_any;
             }
         }
         if (my_type.length() == 0) {
-            if (liberal) goto list_again_as_any;
+            if (mode!= uf::impl::ParseMode::Normal) goto list_again_as_any;
             return uf::concat("Cannot serialize: all elements (", PySequence_Size(v), ") are None in list/sequence.");
         }
         type.push_back('l');
@@ -317,7 +326,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         PyObject *item;
         while ((item = PyIter_Next(iterator))) {
             std::string tmp_type;
-            auto err = serialize_append_guess(to, tmp_type, item, liberal);
+            auto err = serialize_append_guess(to, tmp_type, item, mode);
             Py_DECREF(item);
             if (err.length()) {
                 Py_DECREF(iterator);
@@ -327,18 +336,17 @@ std::string serialize_append_guess(serialize_output_t &to,
                 my_type = std::move(tmp_type);
             else if (*my_type != tmp_type) {
                 Py_DECREF(iterator);
-                if (liberal)
-                    goto again_as_any;
-                else
+                if (mode== uf::impl::ParseMode::Normal)
                     return uf::concat("Cannot serialize: non-uniform types ('",
                                       *my_type, "' vs. '", tmp_type, "') in set: '", v, "'.");
+                goto again_as_any;
             }
         }
         Py_DECREF(iterator);
         if (PyErr_Occurred())
             return "Could not iterate set.";
         if (my_type->length() == 0) {
-            if (liberal) goto again_as_any;
+            if (mode!= uf::impl::ParseMode::Normal) goto again_as_any;
             return uf::concat("Cannot serialize: all elements (", PySet_Size(v), ") are None in list.");
         }
         type.push_back('l');
@@ -478,13 +486,13 @@ std::string serialize_append(serialize_output_t &to, std::string_view &type, PyO
         std::string my_type;
         if (to.index()==2) {
             type.remove_prefix(1);
-            std::string err = serialize_append_guess(to, my_type, v, true); //guess type
+            std::string err = serialize_append_guess(to, my_type, v, uf::impl::ParseMode::Liberal); //guess type
             std::get<2>(to) += 4 + my_type.length() + 4; //add the length of 'value' then the length of serialized 'type';
             return err;
         }
         serialize_output_t my_value(std::in_place_index<0>);
         if (v!=Py_None) {
-            auto err = serialize_append_guess(my_value, my_type, v, true); //guess type
+            auto err = serialize_append_guess(my_value, my_type, v, uf::impl::ParseMode::Liberal); //guess type
             if (err.length())
                 return err;
         }
@@ -602,7 +610,7 @@ std::string serialize_append(serialize_output_t &to, std::string_view &type, PyO
         if (type.size()>=2 && type[1]=='c' && PyBytes_Check(v)) {
             //hah, this is a bytestream and we want 'lc', good. Do that
             std::string dummy_type;
-            return serialize_append_guess(to, dummy_type, v, false);
+            return serialize_append_guess(to, dummy_type, v, uf::impl::ParseMode::Normal);
         } else {
             const bool is_tuple = PyTuple_Check(v);
             const bool is_dict = PyDict_Check(v);

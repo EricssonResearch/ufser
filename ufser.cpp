@@ -1401,7 +1401,7 @@ value_mismatch:
 }
 
 
-std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_view &value, TextParseMode mode)
+std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_view &value, ParseMode mode)
 {
     skip_whitespace(value);
     if (value.length() == 0) return {{}, false};
@@ -1416,7 +1416,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
             value.remove_prefix(5);
         } else
             return {"Strange character literal.", true};
-        if (mode != TextParseMode::JSON) return { "c", false };
+        if (!IsJSON(mode)) return { "c", false };
         //JSON: instead of the character have a single byte string
         char c = to.back();
         to.back() = 0;
@@ -1448,7 +1448,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         return {"Number out-of range for double.", true};
     }
     if (d_end!=value.data()) { //OK this is a number - check if integer
-        if (mode != TextParseMode::JSON) {
+        if (mode != uf::impl::ParseMode::JSON_Strict) {
             const bool sign = ('-'==value.front()); //handle sign to be able to cover uint64_t
             //allow hex base with 0x prefix, but not octal with plain 0 prefix. That would confuse people.
             const int base = value.length()>2u+sign && value[sign] == '0' && value[sign+1] == 'x' ? 16 : 10;
@@ -1504,7 +1504,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         to.append(4, 0);
         std::string type;
         for (const bool convert_to_any : {false, true}) {
-            if (mode==TextParseMode::JSON && !convert_to_any) continue;
+            if (IsJSON(mode) && !convert_to_any) continue;
             bool mismatchin_mapped_types = false;
             while (value.length() && value.front()!=']') {
                 const size_t size_before = to.size();
@@ -1519,7 +1519,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                     serialize_to((uint32_t)vlen, p);
                 } else if (type.length()==0) type = std::move(t);
                 else if (type!=t) {
-                    if (mode==TextParseMode::Normal)
+                    if (mode==uf::impl::ParseMode::Normal)
                         return {uf::concat("Mismatching types in list: <", type, "> and <", t, ">."), true};
                     mismatchin_mapped_types = true;
                     to.resize(orig_len+4);
@@ -1556,9 +1556,9 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         to.append(4, 0);
         std::string key_type;
         std::string mapped_type;
-        if (mode==TextParseMode::JSON) mapped_type = "a";
+        if (IsJSON(mode)) mapped_type = "a";
         for (const bool convert_to_any : {false, true}) {
-            if (mode==TextParseMode::JSON && !convert_to_any) continue;
+            if (IsJSON(mode) && !convert_to_any) continue;
             bool mismatchin_mapped_types = false;
             while (value.length() && value.front()!='}') {
                 auto [t, v] = parse_value(to, value, mode);
@@ -1583,7 +1583,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                     assert(p == to.data() + size_before + 4+4+t.length());
                 } else if (mapped_type.length()==0) mapped_type = std::move(t);
                 else if (mapped_type!=t) {
-                    if (mode==TextParseMode::Normal)
+                    if (mode==uf::impl::ParseMode::Normal)
                         return {uf::concat("Mismatching mapped types: <", key_type, "> and <", t, ">."), true};
                     mismatchin_mapped_types = true;
                     to.resize(orig_len+4);
@@ -1609,7 +1609,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         if (key_type.length() && mapped_type.length())
             return {"m"+key_type+mapped_type, false};
         else
-            return { mode == TextParseMode::JSON ? "msa" : "maa", false}; //could not determine map type
+            return { IsJSON(mode) ? "msa" : "maa", false}; //could not determine map type
     }
     if (value.front()=='(') {
         value.remove_prefix(1);
@@ -1699,17 +1699,17 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         value.remove_prefix(5);
         skip_whitespace(value);
         if (value.length() == 0 || value.front() != '(') return {"Missing 1-4 elements of error_value", true};
-        auto [inner_type, v] = parse_value(to, value, TextParseMode::Liberal); //parse tuple (liberal: come back here for good error)
+        auto [inner_type, v] = parse_value(to, value, ParseMode::Liberal); //parse tuple (liberal: come back here for good error)
         if (v) return {std::move(inner_type), v};
         if (inner_type=="s") { //just the type
             std::string_view remaining = "(\"\", \"\", <>)"; //two additional empty strings and one any
-            parse_value(to, remaining, TextParseMode::Normal);  //normal=perf opt
+            parse_value(to, remaining, ParseMode::Normal);  //normal=perf opt
         } else if (inner_type == "t2ss") { //type and id
             std::string_view remaining = "(\"\", <>)"; //an additional empty string and any
-            parse_value(to, remaining, TextParseMode::Normal);  //normal=perf opt
+            parse_value(to, remaining, ParseMode::Normal);  //normal=perf opt
         } else if (inner_type == "t3ssa") { //type, id and message
             std::string_view remaining = "<>"; //an additional any
-            parse_value(to, remaining, TextParseMode::Normal);  //normal=perf opt
+            parse_value(to, remaining, ParseMode::Normal);  //normal=perf opt
         } else if (inner_type!="t4sssa") //also covers the case of error and inner_type being empty
             return {"Error must contain 's', 't2ss', 't3sss' or 't4sssa'.", true}; //error_value must be a t4sssa (or part of it)
         return {"e", false};
