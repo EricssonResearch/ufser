@@ -724,7 +724,7 @@ public:
                   sview_ptr(a.value().size(), const_cast<char*>(a.value().data()), false)) {}
 
         /** Construct a wview from an any_view. This is a no-copy operation.
-         * The lifetime of the resulting wview shall be longer than that of 'a'.*/
+         * The lifetime of the resulting wview shall be shorter than that of 'a'.*/
         explicit ptr(uf::from_raw_t, const uf::any_view& a)
             : ptr(sview_ptr(a.type(),  false),
                   sview_ptr(a.value(), false)) {}
@@ -1926,7 +1926,7 @@ private:
         insert_map_list: {
             //increment the size field at the beginning
             const uint32_t new_size = size() + 1;
-            if (!vbegin->is_writable()) {
+            if (!vbegin->is_writable() || cindex<0) { //if we insert to the front, ensure vbegin is the length only and we can insert after it.
                 split<has_refc, Allocator>(vbegin, 4); //ensure length is its own chunk
                 vbegin->reserve(4); //make sure writable. Destroys size()
             }
@@ -1956,20 +1956,31 @@ private:
             chunk_ptr tcopy;
             clone_into<has_refc, Allocator>(tcopy, what.tbegin, what.tend, link_after->next);
             link_after->next = std::move(tcopy);
-            if (cindex >= 0)
+            if (cindex >= 0) {
                 children[cindex].second->change_tend(link_after->next);
+                //Fallthrough to inserting the value
+            } else if (vbegin->size()) {
+                //Value must be inserted at the front: must change the content of 'vbegin'
+                chunk_ptr old_vbegin = vbegin->clone();
+                old_vbegin->next = vbegin->next;
+                clone_into<has_refc, Allocator>(vbegin, what.vbegin, what.vend, old_vbegin);
+                goto adjust_children_indices;
+            }
+        } 
+        {
+            //link in a clone of the data of 'what'
+            const chunk_ptr& link_after = cindex < 0 ?
+                vbegin :
+                find_before<has_refc, Allocator>(children[cindex].second->vend,
+                                                 children[cindex].second->vbegin,
+                                                 children[cindex].second->vend);
+            chunk_ptr vcopy;
+            clone_into<has_refc, Allocator>(vcopy, what.vbegin, what.vend, link_after->next);
+            link_after->next = std::move(vcopy);
+            if (cindex >= 0)
+                children[cindex].second->change_vend(link_after->next);
         }
-        //link in a clone of the data of 'what'
-        const chunk_ptr& link_after = cindex < 0 ? 
-            vbegin : 
-            find_before<has_refc, Allocator>(children[cindex].second->vend,
-                                             children[cindex].second->vbegin,
-                                             children[cindex].second->vend);
-        chunk_ptr vcopy;
-        clone_into<has_refc, Allocator>(vcopy, what.vbegin, what.vend, link_after->next);
-        link_after->next = std::move(vcopy);
-        if (cindex >= 0)
-            children[cindex].second->change_vend(link_after->next);
+    adjust_children_indices:
         //increase the index of everyone behind us in 'children'
         for (size_t i = cindex + 1; i < children.size(); i++)
             children[i].first++;

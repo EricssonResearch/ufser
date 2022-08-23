@@ -625,6 +625,20 @@ TEST_CASE_TEMPLATE("wv insert/delete list", wview, uf::wview, uf::gwview, uf::tw
     CHECK_THROWS_AS(w.insert_after(4, wview{ false }), uf::type_mismatch_error);
     //delete again
     random_delete(w, "list");
+
+    //insert into unparsed
+    wview w2(v);
+    CHECK_NOTHROW(w2.insert_after(-1, wview(42)));
+    CHECK(w2.as_any().print() == "<li>[42,1,2,3,4]");
+    CHECK(w2.size() == 5);
+    wview w3(v);
+    CHECK_NOTHROW(w3.insert_after(0, wview(42)));
+    CHECK(w3.as_any().print() == "<li>[1,42,2,3,4]");
+    CHECK(w3.size() == 5);
+    wview w4(v);
+    CHECK_NOTHROW(w4.insert_after(3, wview(42)));
+    CHECK(w4.as_any().print() == "<li>[1,2,3,4,42]");
+    CHECK(w4.size() == 5);
 }
 
 TEST_CASE_TEMPLATE("wv insert/delete list 2", wview, uf::wview, uf::gwview, uf::twview) {
@@ -684,6 +698,20 @@ TEST_CASE_TEMPLATE("wv insert/delete map", wview, uf::wview, uf::gwview, uf::twv
     CHECK_THROWS_AS(w.insert_after(4, wview{ false }), uf::type_mismatch_error);
     //delete again
     random_delete(w, "map");
+
+    //insert into unparsed
+    wview w2(m);
+    CHECK_NOTHROW(w2.insert_after(-1, wview(std::pair(3, "3.3"))));
+    CHECK(w2.as_any().print() == "<mis>{3:\"3.3\",1:\"a\",2:\"b\",3:\"c\",4:\"d\"}");
+    CHECK(w2.size() == 5);
+    wview w3(m);
+    CHECK_NOTHROW(w3.insert_after(0, wview(std::pair(3, "3.3"))));
+    CHECK(w3.as_any().print() == "<mis>{1:\"a\",3:\"3.3\",2:\"b\",3:\"c\",4:\"d\"}");
+    CHECK(w3.size() == 5);
+    wview w4(m);
+    CHECK_NOTHROW(w4.insert_after(3, wview(std::pair(3, "3.3"))));
+    CHECK(w4.as_any().print() == "<mis>{1:\"a\",2:\"b\",3:\"c\",4:\"d\",3:\"3.3\"}");
+    CHECK(w4.size() == 5);
 }
 
 TEST_CASE_TEMPLATE("wv insert/delete optional", wview, uf::wview, uf::gwview, uf::twview) {
@@ -741,6 +769,20 @@ TEST_CASE_TEMPLATE("wv insert/delete tuple", wview, uf::wview, uf::gwview, uf::t
     CHECK(w.as_any().print() == "<t4dilbob>(42.42,4,[true,false],false)");
     CHECK_NOTHROW(w.erase(3));
     CHECK(w.as_any().print() == "<t3dilb>(42.42,4,[true,false])");
+
+    //insert into unparsed
+    wview w2(a);
+    CHECK_NOTHROW(w2.insert_after(-1, wview('c')));
+    CHECK(w2.as_any().print() == "<t5ciiii>('c',1,2,3,4)");
+    CHECK(w2.size() == 5);
+    wview w3(a);
+    CHECK_NOTHROW(w3.insert_after(0, wview('c')));
+    CHECK(w3.as_any().print() == "<t5iciii>(1,'c',2,3,4)");
+    CHECK(w3.size() == 5);
+    wview w4(a);
+    CHECK_NOTHROW(w4.insert_after(3, wview('c')));
+    CHECK(w4.as_any().print() == "<t5iiiic>(1,2,3,4,'c')");
+    CHECK(w4.size() == 5);
 }
 
 TEST_CASE_TEMPLATE("wv insert/delete errors", wview, uf::wview, uf::gwview, uf::twview) {
