@@ -45,6 +45,17 @@ bool ResolveABCNames() {
 bool IsSequence(PyObject* o) { return (ABC_Sequence || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Sequence); }
 bool IsMapping(PyObject* o) { return (ABC_Mapping || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Mapping); }
 
+//also clears the exception. Returns empty if no exception
+std::string GetExceptionText() {
+    if (!PyErr_Occurred()) return {};
+    PyObject* type, * value, * traceback;
+    PyErr_Fetch(&type, &value, &traceback);
+    std::string ret = uf::concat(to_string(type), value ? ": " + to_string(value) : "");
+    Py_XDECREF(type);
+    Py_XDECREF(value);
+    Py_XDECREF(traceback);
+    return ret;
+}
 std::string serialize_append_guess(serialize_output_t &to,
                                    std::string& type, PyObject* v, uf::impl::ParseMode mode)
 {
@@ -143,6 +154,44 @@ std::string serialize_append_guess(serialize_output_t &to,
                     return "Python tuple member generated no type: " + to_string(PyTuple_GetItem(v, u));
             }
         return {};
+    }
+    if (auto e = error_value_check(v)) {
+        auto error = e->error;
+        if (!error)
+            return "Cannot serialize invalid " UF_ERRNAME;
+        switch (to.index()) {
+        default: assert(0); break;
+        case 4: break;
+        case 3: break;
+        case 2: std::get<2>(to) += uf::impl::serialize_len(*error); break;
+        case 1: uf::impl::serialize_to(*error, std::get<1>(to).first); break;
+        case 0:
+            std::get<0>(to).reserve(std::get<0>(to).length() + uf::impl::serialize_len(*error));
+            char* p = std::get<0>(to).data() + std::get<0>(to).length(); //current pos at end
+            uf::impl::serialize_to(*error, p);
+            break;
+        }
+        type.push_back('e');
+        return {};
+    }
+    //Check if the type has "__dict_for_serialization__" member
+    if (PyObject_HasAttrString(v, DICT_FOR_SERIALIZATION_ATTR_NAME)) {
+        pyobj v2 = PyObject_GetAttrString(v, DICT_FOR_SERIALIZATION_ATTR_NAME);
+        if (!v2) {
+            std::string err = GetExceptionText();
+            return uf::concat("Error obtaining (the existing) '__dict_for_serialization__' attr of value '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "'",
+                              err.empty() ? "." : ": " + err + ".");
+        }
+        if (!PyCallable_Check(v2))
+            return uf::concat("The '__dict_for_serialization__' attr of value '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "' is not callable, but is of value '",
+                              to_string(v2), "' and of type '", to_string((PyObject*)Py_TYPE(v2)), "'.");
+        pyobj v3 = PyObject_CallNoArgs(v2);
+        if (PyErr_Occurred())
+            return uf::concat("Exception calling '__dict_for_serialization__()' attr of value '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "': ",
+                              GetExceptionText(), ".");
+        std::string ret = serialize_append_guess(to, type, v3, mode);
+        if (ret.size()) ret.append(" (Value returned by __dict_for_serialization__() of value '").append(to_string(v)).append("' of type '").append(to_string((PyObject*)Py_TYPE(v))).append("'.)");
+        return ret;
     }
     //Here we do a bit of an optimization for vanilla dicts
     //For dicts the PyDict_Next() can iterate the dict without allocating new objects
@@ -338,13 +387,12 @@ std::string serialize_append_guess(serialize_output_t &to,
                 Py_DECREF(iterator);
                 if (mode== uf::impl::ParseMode::Normal)
                     return uf::concat("Cannot serialize: non-uniform types ('",
-                                      *my_type, "' vs. '", tmp_type, "') in set: '", v, "'.");
-                goto again_as_any;
+                                      *my_type, "' vs. '", tmp_type, "') in set: '", to_string(v), "'.");
             }
         }
         Py_DECREF(iterator);
         if (PyErr_Occurred())
-            return "Could not iterate set.";
+            return "Could not iterate set: "+ GetExceptionText();
         if (my_type->length() == 0) {
             if (mode!= uf::impl::ParseMode::Normal) goto again_as_any;
             return uf::concat("Cannot serialize: all elements (", PySet_Size(v), ") are None in list.");
@@ -373,30 +421,11 @@ std::string serialize_append_guess(serialize_output_t &to,
         }
         Py_DECREF(iterator);
         if (PyErr_Occurred())
-            return "Cannot serialize: could not iterate set.";
+            return "Cannot serialize: could not iterate set: " + GetExceptionText();
         type.append("la");
         return {};
     }
-    if (auto e = error_value_check(v)) {
-        auto error = e->error;
-        if (!error)
-            return "Cannot serialize invalid " UF_ERRNAME;
-        switch (to.index()) {
-        default: assert(0); break;
-        case 4: break;
-        case 3: break;
-        case 2: std::get<2>(to) += uf::impl::serialize_len(*error); break;
-        case 1: uf::impl::serialize_to(*error, std::get<1>(to).first); break;
-        case 0:
-            std::get<0>(to).reserve(std::get<0>(to).length() + uf::impl::serialize_len(*error));
-            char *p = std::get<0>(to).data() + std::get<0>(to).length(); //current pos at end
-            uf::impl::serialize_to(*error, p);
-            break;
-        }
-        type.push_back('e');
-        return {};
-    }
-    return uf::concat("Cannot serialize this value: '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "' (to.index=", to.index(), ").");
+    return uf::concat("Cannot serialize this value: '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "'.");
 }
 
 std::string serialize_append(serialize_output_t &to, std::string_view &type, PyObject* v)

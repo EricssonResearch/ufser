@@ -9,6 +9,7 @@
 #define UF_MODNAME "ufser"
 #define UF_ERRNAME_ONLY "Error"
 #define UF_ERRNAME UF_MODNAME "." UF_ERRNAME_ONLY
+#define DICT_FOR_SERIALIZATION_ATTR_NAME "__dict_for_serialization__"
 
 inline std::string_view PyUnicode_AsUTF8String_view(PyObject *v)
 {
