@@ -1050,3 +1050,27 @@ TEST_CASE("parent assign") {
     CHECK_NOTHROW(ava = wva.as_any());
     CHECK(ava.print()==R"(<la>[<i>1,<d>1.1,<la>[<i>1,<d>1.1,<s>"aa"]])");
 }
+
+TEST_CASE("insert & set") {
+    using VA = std::vector<uf::any>;
+    VA va = { uf::any(1), uf::any(1.1), uf::any("aa") };
+    uf::wview wva(va);
+    wva.insert_after(-1, uf::wview(uf::any_view()));
+    CHECK(wva.as_any().print() == R"(<la>[<>,<i>1,<d>1.1,<s>"aa"])");
+    uf::wview first = wva[0][0];
+    first.set('c');
+    CHECK(wva.as_any().print() == R"(<la>[<c>'c',<i>1,<d>1.1,<s>"aa"])");
+}
+
+TEST_CASE("insert & set 2") {
+    uf::any a(uf::from_text, R"([<>"alef",<>"bet",<>{"x":<>1,"y":<>true}])");
+    uf::wview json(uf::from_raw, a);
+    CHECK(json.as_any().as_view().print_json() == R"(["alef","bet",{"x":1,"y":true}])");
+    json.erase(0);
+    CHECK(json.as_any().as_view().print_json() == R"(["bet",{"x":1,"y":true}])");
+    json.insert_after(-1, uf::wview(uf::any_view()));
+    CHECK(json.as_any().as_view().print_json() == R"([null,"bet",{"x":1,"y":true}])");
+    uf::wview first = json[0][0];
+    first.set("alef");
+    CHECK(json.as_any().as_view().print_json() == R"(["alef","bet",{"x":1,"y":true}])");
+}
