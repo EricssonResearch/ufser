@@ -20,6 +20,7 @@ static void serialize_append_uint32(serialize_output_t& to, uint32_t size)
 }
 
 static PyObject* ABC = nullptr, * ABC_Sequence = nullptr, * ABC_Mapping = nullptr;
+static PyObject* enum_Enum = nullptr;
 
 //returns false on error
 //note: we take new references to the module and the two classes forever
@@ -45,6 +46,17 @@ bool ResolveABCNames() {
 bool IsSequence(PyObject* o) { return (ABC_Sequence || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Sequence); }
 bool IsMapping(PyObject* o) { return (ABC_Mapping || ResolveABCNames()) && PyObject_IsInstance(o, ABC_Mapping); }
 
+bool ResolveEnumEnum() {
+    if (enum_Enum) return true;
+    PyObject* enum_ = PyImport_ImportModule("enum");
+    if (!enum_) return false;
+    enum_Enum = PyObject_GetAttrString(enum_, "Enum");
+    Py_DECREF(enum_);
+    return bool(enum_Enum);
+}
+
+bool IsEnum(PyObject* o) { return (enum_Enum || ResolveEnumEnum()) && PyObject_IsInstance(o, enum_Enum); }
+
 //also clears the exception. Returns empty if no exception
 std::string GetExceptionText() {
     if (!PyErr_Occurred()) return {};
@@ -56,6 +68,7 @@ std::string GetExceptionText() {
     Py_XDECREF(traceback);
     return ret;
 }
+
 std::string serialize_append_guess(serialize_output_t &to,
                                    std::string& type, PyObject* v, uf::impl::ParseMode mode)
 {
@@ -424,6 +437,13 @@ std::string serialize_append_guess(serialize_output_t &to,
             return "Cannot serialize: could not iterate set: " + GetExceptionText();
         type.append("la");
         return {};
+    }
+    if (IsEnum(v) && PyObject_HasAttrString(v, "_name_")) {
+        if (pyobj name = PyObject_GetAttrString(v, "_name_"))
+            return serialize_append_guess(to, type, name, mode);
+        std::string err = GetExceptionText();
+        return uf::concat("Could not take _name_ of this Enum value '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "'",
+                          err.empty() ? "." : ": " + err + ".");
     }
     return uf::concat("Cannot serialize this value: '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "'.");
 }
