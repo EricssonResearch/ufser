@@ -838,13 +838,8 @@ namespace uf
 template<typename... TT>
 auto concat(TT const&... tt) { std::ostringstream o; (o << ... << tt); return o.str(); }
 
-struct error : public std::runtime_error {
-    [[nodiscard]] explicit error(std::string &&msg) : runtime_error(std::move(msg)) {}
-    [[nodiscard]] error(const error&) = default;
-    [[nodiscard]] error(error&&) noexcept = default;
-    error &operator=(const error&) = default;
-    error& operator=(error&&) noexcept = default;
-};
+/** Base class for all ufser errors and exceptions. */
+struct error : public std::logic_error { using logic_error::logic_error; };
 
 /** Serialization or type mismatch exceptions.
  * It can take 2 types with positions. Descendats may use one or both,
@@ -4690,15 +4685,15 @@ namespace uf {
 /** Error class contained in expected */
 struct error_value : public error
 {
-    error_value() : uf::error({}) {}
-    error_value(const error_value&) = default;
-    error_value(error_value&&) noexcept = default;
+    [[nodiscard]] error_value() : error("") {}
+    [[nodiscard]] error_value(const error_value&) = default;
+    [[nodiscard]] error_value(error_value&&) noexcept = default;
     error_value& operator=(const error_value&) = default;
     error_value& operator=(error_value&&) noexcept = default;
-    error_value(std::string_view t, std::string_view m) : error({}), type(t), msg(m) {}
-    error_value(std::string_view t, std::string_view m, uf::any v) : error({}), type(t), msg(m), value(std::move(v)) {}
+    [[nodiscard]] error_value(std::string_view t, std::string_view m) : error(""), type(t), msg(m) {}
+    [[nodiscard]] error_value(std::string_view t, std::string_view m, uf::any v) : error(""), type(t), msg(m), value(std::move(v)) {}
     template <typename ...TT>
-    error_value(std::string_view t, std::string_view m, TT&&... v) : error({}), type(t), msg(m), value(std::forward_as_tuple(v...)) { //forward_as_tuple allows non-lvalues
+    error_value(std::string_view t, std::string_view m, TT&&... v) : error(""), type(t), msg(m), value(std::forward_as_tuple(v...)) { //forward_as_tuple allows non-lvalues
         static_assert(uf::impl::is_serializable_f<impl::single_type_t<TT...>, true>(), "Type must be serializable.");
     }
     std::string type;
