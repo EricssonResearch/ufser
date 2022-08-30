@@ -24,6 +24,7 @@ struct string_variant : public std::variant<std::string_view, std::string>
     uint32_t size() const noexcept { return as_view().size(); }
     bool empty() const noexcept { return as_view().empty(); }
     bool operator ==(const std::string_view& sv) const noexcept { return as_view() == sv; }
+    bool operator ==(const string_variant& o) const noexcept { return as_view() == o.as_view(); }
     bool has_view() const noexcept { return index() == 0; }
 };
 
