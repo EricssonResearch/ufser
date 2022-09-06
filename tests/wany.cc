@@ -995,6 +995,92 @@ TEST_CASE("linear_search") {
     CHECK(!ret.first);
 }
 
+TEST_CASE("linear_search map") {
+    struct Key {
+        std::string s;
+        int i;
+        auto tuple_for_serialization() const noexcept { return std::tie(s, i); }
+        auto tuple_for_serialization()       noexcept { return std::tie(s, i); }
+        auto operator <=>(const Key&) const noexcept = default;
+    };
+    std::map<Key, uf::any> mt2sia = { {{"a", 1}, uf::any(42)}, {{"b", 2}, uf::any(43)}, {{"b", 22}, uf::any(43.43)}, {{"c", 3}, uf::any(44)}, {{"d", 4}, uf::any(45)}, {{"e", 5}, uf::any(46)}, };
+
+    uf::wview vmt2sia{ mt2sia };
+    std::pair<uf::wview, std::string> ret;
+    //we find n==1
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview("a"), 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("a",1),<i>42))");
+
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview("b"), 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("b",2),<i>43))");
+
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview("e"), 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("e",5),<i>46))");
+
+    //Search second & last element in fresh
+    vmt2sia = uf::wview{ mt2sia }; //move assignment: re-point vmt2sia to new, freshly scanned value
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview("b"), 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("b",2),<i>43))");
+
+    vmt2sia = uf::wview{ mt2sia }; //move assignment: re-point vmt2sia to new, freshly scanned value
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview("e"), 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("e",5),<i>46))");
+
+    //we find n==0
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview("b"), 0));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("b",2),<i>43))");
+    
+    //n==2, find second appearance of "b"
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview(std::pair("b", 22)), 2));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("b",22),<d>43.43))");
+
+    //n==1, find 
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview(std::pair("b", 22)), 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(ret.first);
+    CHECK(ret.first.as_any().as_view().print() == R"(<t2t2sia>(("b",2),<i>43))");
+
+    //check that result is a live view of the original
+    CHECK_NOTHROW(ret.first[1][0].set("forty-two"));
+    CHECK(vmt2sia.as_any().as_view().print() == R"(<mt2sia>{("a",1):<i>42,("b",2):<s>"forty-two",("b",22):<d>43.43,("c",3):<i>44,("d",4):<i>45,("e",5):<i>46})");
+
+    //n==1, not find 
+    CHECK_NOTHROW(ret = vmt2sia.linear_search(uf::wview{ "x"}, 1));
+    CHECK_NOTHROW(vmt2sia.check());
+    CHECK(ret.second == "");
+    CHECK(!ret.first);
+}
+
+TEST_CASE("linear_search JSON") {
+    std::map<std::string, uf::any> msa = { {"a", uf::any(1)}, {"b", uf::any("b")}, {"c", uf::any(42.42)} };
+
+    CHECK(uf::wview(msa).linear_search(uf::wview("a"), 1).first[1][0].as_any().as_view().print() == "<i>1");
+    CHECK(uf::wview(msa).linear_search(uf::wview("b"), 1).first[1][0].as_any().as_view().print() == "<s>\"b\"");
+    CHECK(uf::wview(msa).linear_search(uf::wview("c"), 1).first[1][0].as_any().as_view().print() == "<d>42.42");
+}
+
 TEST_CASE("from any") {
     uf::any a(uf::from_text, "{\"a\":2,\"b\":4}");
     uf::wview va(uf::from_raw, a); //'a' is now officially invalid as va can destroy its value

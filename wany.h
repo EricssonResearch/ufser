@@ -1084,24 +1084,32 @@ public:
             assert(w->check(LOC));
         }
 
-        /** Fast searching in lists. We do not create children, only for
-         * the element found. We can only serarch by the beginning of the
-         * serialized value of the elements of 'l'.
+        /** Fast searching in lists in maps. We do not create children, only for
+         * the element found. For lists, we can only serarch by the beginning of the
+         * serialized value of the elements of 'l', for maps we only search by the 
+         * beginning of the key value of 'm'.
          * Only exact type matches expected and only exact value matches are found.
          * For this to work:
-         * - 'this' has to be a list of tuples T1
+         * - 'this' has to be a list of tuples T1 or a map with key type T1
          * - 't' has to be a tuple T2
          * - the first 'n' fields of T1 and T2 must be the same.
          * Alternatively if n==1, then either T1 or T2 is allowed to be a non tuple.
          * Alternatively, if n==0, all of 't' is matched against the first member 
-         * of 'this's content (or all its content if not a tuple).
+         * of 'this's content (for lists) or key (for maps) (or all its content/key if not a tuple).
          * For example
          * this=lt3iis, t=t2ii, n=2 will search by two integers.
          * this=lt3iis, t=t32iid, n=2 will search by two integers. The rest of t is igonored
          * this=lt2is, t=t2is, n=1 will search by the integer index.
          * this=lt2is, t=t2is, n=0 will search by the integer+string index.
          * this=lt2is, t=i, n=1 or0  will search by the integer index.
-         * @returns Human readable string on type mismatch; empty ptr & string 
+         * this=mt3iisX, t=t2ii, n=2 will search by two integers.
+         * this=mt3iisX, t=t32iid, n=2 will search by two integers. The rest of t is igonored
+         * this=mt2isX, t=t2is, n=1 will search by the integer index.
+         * this=mt2isX, t=t2is, n=0 will search by the integer+string index.
+         * this=mt2isX, t=i, n=1 or 0  will search by the integer index.
+         *   or the simplest case of maps:
+         * this=msX, t=s, n=1 or 0, will search by the string index
+         * @returns Human readable string on type mismatch; empty ptr & string
          * if not found, empty string and set ptr for the first element found.*/
         std::pair<ptr, std::string> linear_search(const ptr &t, int n) const {
             if (!p || n<0) return {};
@@ -1990,19 +1998,29 @@ private:
     }
 
     std::pair<ptr, std::string> linear_search(const ptr &t, int n) {
-        if (typechar()!='l') return {{}, uf::concat("linear_search() is possible only in lists and not in <",
-                                                    type().as_view(), ">.")};
+        const char c = typechar();
+        if (c != 'l' && c != 'm') 
+            return { {}, uf::concat("linear_search() is possible only in lists/maps and not in <", 
+                                    type().as_view(), ">.") };
+        const bool is_map = c == 'm';
         auto t1_ = type(), t2_ = t->type();
         std::string_view t1 = t1_.as_view().substr(1), t2 = t2_.as_view();
-        auto [t1x, err1] = parse_tuple_type(t1, std::max(1, n));
-        if (err1.length()) return {{}, uf::concat(err1, " (<", t1, ">)")};
-        if (t1!=t2) {
-            if (n==0) {
-                if (t1x!=t2) return {{}, uf::concat("Mismatching types: <", t1x, "> and <", t2, ">.")};
+
+        std::string_view key_type = t1; //for lists the key is the whole element
+        if (is_map) {
+            if (auto [len, err] = parse_type(key_type, false); err != ser::ok)
+                return { {}, uf::concat("internal error in linear search #4: ", key_type) };
+            else key_type = key_type.substr(0, len);
+        }
+        auto [t1x, err1] = parse_tuple_type(key_type, std::max(1, n)); //the part of the key we compare
+        if (err1.length()) return { {}, uf::concat(err1, " (<", key_type, ">)") };
+        if (key_type != t2) {
+            if (n == 0) {
+                if (t1x != t2) return { {}, uf::concat("Mismatching types: <", t1x, "> and <", t2, ">.") };
             } else {
                 auto [t2x, err2] = parse_tuple_type(t2, n);
-                if (err2.length()) return {{}, uf::concat(err2, " (<", t2, ">)")};
-                if (t1x!=t2x) return {{}, uf::concat("Mismatching types: <", t1x, "> and <", t2x, ">.")};
+                if (err2.length()) return { {}, uf::concat(err2, " (<", t2, ">)") };
+                if (t1x != t2x) return { {}, uf::concat("Mismatching types: <", t1x, "> and <", t2x, ">.") };
             }
         }
         const uint32_t no_elements = size();
@@ -2037,9 +2055,20 @@ private:
                 std::string_view type(t1);
                 if (auto err = serialize_scan_by_type_from(type, pVC, end, [](std::string_view &) {}, more_val, false))
                     return {{}, uf::concat("Internal value error #2 in linear_search(): ", err->prepend_type0(t1_.as_view(), type).what())};
+                if (is_map) {
+                    if (type.empty()) return { {}, uf::concat("Internal value error #2c in linear_search(): ", t1)};
+                    if (auto err = serialize_scan_by_type_from(type, pVC, end, [](std::string_view&) {}, more_val, false))
+                        return { {}, uf::concat("Internal value error #2b in linear_search(): ", err->prepend_type0(t1_.as_view(), type).what()) };
+                } 
+                if (type.size()) return { {}, uf::concat("Internal value error #2d in linear_search(): ", t1, "->", type)};
                 vc = split<has_refc, Allocator>(vc, pVC - vc->data());
                 //now the selected data is in the chunk range [vc_start, vc)
                 chunk_ptr tc_inner = split<has_refc, Allocator>(tbegin, 1);
+                if (is_map) { //prepend 't2' for maps
+                    auto tpair = chunk_ptr(sview_ptr("t2", true));
+                    tpair->next = std::move(tc_inner);
+                    tc_inner = std::move(tpair);
+                }
                 ptr w = children.emplace(children.begin()+cindex, std::piecewise_construct,
                                          std::forward_as_tuple(i),
                                          std::forward_as_tuple(std::move(tc_inner), chunk_ptr(tend),
@@ -2060,6 +2089,12 @@ private:
                 std::string_view type(t1);
                 if (auto err = serialize_scan_by_type_from(type, pVC, end, [](std::string_view &) {}, more_val, false))
                     return {{}, uf::concat("Internal value error in linear_search(): ", err->prepend_type0(t1_.as_view(), type).what())};
+                if (is_map) {
+                    if (type.empty()) return { {}, uf::concat("Internal value error #bc in linear_search(): ", t1) };
+                    if (auto err = serialize_scan_by_type_from(type, pVC, end, [](std::string_view&) {}, more_val, false))
+                        return { {}, uf::concat("Internal value error #b in linear_search(): ", err->prepend_type0(t1_.as_view(), type).what()) };
+                }
+                if (type.size()) return { {}, uf::concat("Internal value error #bd in linear_search(): ", t1, "->", type) };
             }
         }
         return {};
