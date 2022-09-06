@@ -1160,3 +1160,36 @@ TEST_CASE("insert & set 2") {
     first.set("alef");
     CHECK(json.as_any().as_view().print_json() == R"(["alef","bet",{"x":1,"y":true}])");
 }
+
+//lookup msa, create if not existing
+uf::wview lookup(uf::wview& w, std::string_view key) {
+    assert(w.typechar() == 'm');
+    //We chould check the keys already looked up. These are stored in wview's 
+    //`children` member. This would speed up situations when a few keys are
+    //looked up many times and there are many keys. We decide not to do this now as
+    //- it requires that we look into `children` from here, which is a layer 
+    //  violation and a lot of code
+    //- it would be just extra cost if we do lookup only once for each key
+    //- parsing an msa is not that heavy, as both string and any carries good length
+    //  values, so skipping them is easy.
+    auto [res, err] = w.linear_search(uf::wview(key), 0);
+    if (err.size())
+        throw uf::error(uf::concat("looking up '", key, "': ", err));
+    if (res)
+        return res[1][0];
+    w.insert_after(w.size() - 1, uf::wview(std::make_tuple(key, uf::any())));
+    return w[w.size() - 1][1][0];
+}
+
+TEST_CASE("JSON insert") {
+    uf::wview json{std::map<std::string, uf::any>{}}, json2 = json.clone();
+
+    CHECK_NOTHROW(lookup(json, "aa").set(5));
+    CHECK_NOTHROW(lookup(json, "bb").set(6));
+
+    CHECK_NOTHROW(lookup(json2, "aa").set(json));
+    CHECK_NOTHROW(lookup(json2, "bb").set(5));
+
+    CHECK(json.as_any().as_view().print() == R"(<msa>{"aa":<i>5,"bb":<i>6})");
+    CHECK(json2.as_any().as_view().print() == R"(<msa>{"aa":<msa>{"aa":<i>5,"bb":<i>6},"bb":<i>5})");
+}

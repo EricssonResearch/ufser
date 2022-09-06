@@ -1702,6 +1702,8 @@ private:
             //value of 'a' is parsed to <tlen> <type chunks...> <vlen> <value chunks...>
             assert(parent->vbegin->size() == 4);
             assert(tend->size() == 4);
+            //We cannot change the sizes here to that of the new one, since we may have
+            //self-assignment
             [[fallthrough]];
         case 't':
             if (type_changed)
@@ -1717,6 +1719,18 @@ private:
             clone_into<has_refc, Allocator>(vbegin, w.vbegin, w.vend, vend);
             if (new_tbegin)
                 tbegin->copy_from(std::move(*new_tbegin));
+            if (parent->typechar() == 'a') {
+                if (const uint32_t tlen = ::uf::impl::flatten_size<has_refc, Allocator>(w.tbegin, w.tend)
+                    ; uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) != tlen) {
+                    char* p = parent->vbegin->data_writable();
+                    uf::impl::serialize_to(tlen, p);
+                }
+                if (const uint32_t vlen = ::uf::impl::flatten_size<has_refc, Allocator>(w.vbegin, w.vend)
+                    ; uf::deserialize_as<uint32_t>(std::string_view(tend->data(), 4)) != vlen) {
+                    char* p = tend->data_writable();
+                    uf::impl::serialize_to(vlen, p);
+                }
+            }
             assert(check(LOC));
             return *this;
         case 'x':
@@ -1781,6 +1795,14 @@ private:
             //value of 'a' is parsed to <tlen> <type chunks...> <vlen> <value chunks...>
             assert(parent->vbegin->size() == 4);
             assert(tend->size() == 4);
+            if (uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) != type.length()) {
+                char* p = parent->vbegin->data_writable();
+                uf::impl::serialize_to(uint32_t(type.size()), p);
+            }
+            if (uf::deserialize_as<uint32_t>(std::string_view(tend->data(), 4)) != value.length()) {
+                char* p = tend->data_writable();
+                uf::impl::serialize_to(uint32_t(value.size()), p);
+            }
             [[fallthrough]];
         case 't':
             if (type_changed)
