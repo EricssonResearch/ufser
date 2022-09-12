@@ -55,7 +55,7 @@ inline std::string x_escape(std::string_view v) {
 }
 
 /** A base class for (potentially) shared pointers for objects (potentially) with a refcount field.
- * in case of 'has_refc' is set, 'object' must have a refcount field initialized to 1.
+ * in case of 'has_refc' is set, 'object' must have a refc_inc() and refc_dec() function, both returning the (epheremal) new value of the refcount.
  * 'object' must have get_memsize() to return how much to deallocate. May default to sizeof(object)*/
 template <typename object, bool has_refc, template <typename> typename Allocator>
 class shared_ref_base
@@ -64,7 +64,7 @@ protected:
     object* p = nullptr;
     void unref() const noexcept
     {
-        if constexpr (has_refc) if (p && --p->refcount == 0) {
+        if constexpr (has_refc) if (p && p->refc_dec() == 0) {
             const size_t size = p->get_memsize();
             p->~object();
             Allocator<char>().deallocate((char*)(void*)p, size);
@@ -75,14 +75,14 @@ public:
     shared_ref_base() noexcept = default;
     shared_ref_base(const shared_ref_base & o) noexcept : p(o.p) { 
         if constexpr (has_refc) 
-            if (p) { p->refcount++; assert(p->refcount); } 
+            if (p) { [[maybe_unused]] auto c = p->refc_inc(); assert(c); }
     }
     shared_ref_base(shared_ref_base && o) noexcept : p(o.p) { o.p = nullptr; }
     shared_ref_base& operator =(const shared_ref_base & o) noexcept { 
         if (this != &o) { 
             if constexpr (has_refc) { 
                 unref(); 
-                if (o.p) { o.p->refcount++; assert(o.p->refcount); }
+                if (o.p) { [[maybe_unused]] auto c = o.p->refc_inc(); assert(c); }
             } 
             p = o.p;
         } 
@@ -96,7 +96,7 @@ public:
     object* operator ->() const noexcept { return p; }
     object& operator *() const noexcept { return *p; }
     explicit operator bool() const noexcept { return bool(p); }
-    auto get_refcount() const noexcept { static_assert(has_refc); return p ? p->refcount : 0; }
+    auto get_refcount() noexcept { return has_refc && p ? p->get_refcount() : 0; } //returned value may be invalid right after if multi-threaded
 };
 
 /// A shared writable string view. Not thread safe
@@ -160,14 +160,14 @@ public:
             void* mem = Allocator<char>().allocate(memsize(l));
             p = new(mem) sview(l);
         }
-        /** Creates a copy of this string, maybe trimmed & different writable. */
+        /** Creates a copy of this string, trimmed & writable. */
         ptr clone(uint32_t off_ = 0, uint32_t len_ = (uint32_t)-1) const {
             assert(p);
             assert(off_ <= p->length);
             len_ = std::min(len_, p->length - off_);
             ptr ret;
             void* mem = Allocator<char>().allocate(memsize(len_));
-            ret.p = new(mem) sview(len_, p->data() + off_);
+            ret.p = new(mem) sview(len_, p->data() + off_); //copy
             return ret;
         }
     };
@@ -175,20 +175,23 @@ public:
     uint32_t size() const noexcept { return length; }
     const char* data() const noexcept { return owning ? data_ : ptr_; }
     std::string_view as_view() const noexcept { return { data(), size() }; }
-    char* data_writable() noexcept { assert(writable);  return owning ? data_ : ptr_; }
-    bool is_writable() const noexcept { return writable; }
-    bool is_unique() const noexcept { return has_refc && refcount == 1; } //We are never unique if we do not manage refcount
-    void make_read_only() noexcept { writable = false; }
+    char* data_writable() noexcept { assert(is_writable()); return owning ? data_ : ptr_; }
+    bool is_writable() const noexcept { return writable.load(std::memory_order_acquire); }
+    bool is_unique() const noexcept { return has_refc && refcount.load(std::memory_order_acquire) == 1; } //We are never unique if we do not manage refcount
+    void make_read_only() noexcept { writable.store(false, std::memory_order_release); }
+    auto refc_inc() noexcept { return refcount.fetch_add(1, std::memory_order_acq_rel); }
+    auto refc_dec() noexcept { make_read_only(); return refcount.fetch_sub(1, std::memory_order_acq_rel); } //Once we have been referenced several times, multiple threads may have our content and can read us - no modification aferwards.
+    auto get_refcount() noexcept { return refcount.load(std::memory_order_acquire); }
 private:
-    uint32_t length; 
-    uint16_t refcount = 1;
-    bool writable;
+    const uint32_t length; 
+    std::atomic<uint16_t> refcount = 1;
+    std::atomic_bool writable;
 public:
     bool const owning;
     constexpr size_t get_memsize() const noexcept { return owning ? ptr::memsize(length) : sizeof(sview); }
 private:
     union {
-        char* ptr_; //if we are non-owning
+        char* const ptr_; //if we are non-owning
         struct { char data_[]; }; //if we are owning
     };
     //delete the big five. The latter four would mess with the refount.
@@ -215,6 +218,9 @@ struct RefCount {
     RefCount& operator=(const RefCount&) = delete;
     RefCount& operator=(RefCount&&) = delete;
     uint16_t refcount = 1;
+    auto refc_inc() noexcept { return ++refcount; }
+    auto refc_dec() noexcept { return --refcount; }
+    auto get_refcount() noexcept { return refcount; }
 };
 
 struct NoRefCount {};
@@ -278,7 +284,16 @@ public:
     
     static constexpr size_t get_memsize() noexcept { return sizeof(chunk); }
     char const* data() const noexcept { return root ? root->data() + off : nullptr; }
-    char* data_writable() noexcept { return root ? root->data_writable() + off : nullptr; }
+    char* data_writable() noexcept { 
+        if (!root) return nullptr;
+        //since for writable only we own 'root' (refocunt must be 1), 
+        //there is no chance of a change of writable status between this check and the final line
+        if (!root->is_writable()) { 
+            root = root.clone(off, len);
+            off = 0;
+        }
+        return root->data_writable()+off; 
+    }
     uint32_t size() const noexcept { return len; }
     std::string_view as_view() const noexcept {return std::string_view{data(), size()}; }
     
@@ -2275,7 +2290,23 @@ inline void tallocator_reset() noexcept { impl::MonotonicAllocatorBase<impl::Mon
 
 } // uf::
 
-
+/* On the thread safety of wview.
+ * - wviews are not thread safe as a general rule.
+ * - However, 2 different wviews NOT sharing data (one is not part of the other) never shares chunks, just sviews.
+ * - For this reason sviews are thread safe in that 
+ *   - Their refcount is atomic. 
+ *   - They cannot be copied, moved, but only freshly initialized from memory.
+ *   - As soon as their refocunt ever increases above 1, they become read-only, 
+ *     even if their refcount falls back to 1. This means that if you create 2 sview::ptrs 
+ *     to the same swiev, that sview becomes read-only and hence thread safe.
+ *
+ * To use vwiews in a thread-safe manner do the following.
+ * - Use a wview only on one thread at a time.
+ * - Sub-views shall not be used concurrently with the parent wview.
+ * - You can, however, use wview::set() setting the content of a wview to 
+ *   the value of some other wview, like A.set(B) - and later use A and B 
+ *   concurrently.
+ */
 
 /* LUA language design
 
