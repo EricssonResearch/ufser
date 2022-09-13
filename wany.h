@@ -4,6 +4,7 @@
 #include <map>
 #include <iostream>
 #include <forward_list>
+#include <atomic>
 
 #define XSTR(x) STR(x)
 #define STR(x) #x
