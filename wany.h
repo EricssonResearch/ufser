@@ -100,9 +100,27 @@ public:
     auto get_refcount() noexcept { return has_refc && p ? p->get_refcount() : 0; } //returned value may be invalid right after if multi-threaded
 };
 
+/** A reference count. This makes the descendant objects
+ * non-copyable and non-movable as pointers point to it and
+ * any such operation would mess with the refcount.*/
+class RefCount {
+    std::atomic<uint16_t> refcount = 1;
+public:
+    RefCount() noexcept = default;
+    RefCount(const RefCount&) = delete;
+    RefCount(RefCount&&) noexcept = delete;
+    RefCount& operator=(const RefCount&) = delete;
+    RefCount& operator=(RefCount&&) = delete;
+    auto refc_inc() noexcept { return refcount.fetch_add(1, std::memory_order_acq_rel)+1; }
+    auto refc_dec() noexcept { return refcount.fetch_sub(1, std::memory_order_acq_rel)-1; }
+    auto get_refcount() const noexcept { return refcount.load(std::memory_order_relaxed); }
+};
+
+struct NoRefCount {};
+
 /// A shared writable string view. Not thread safe
 template <bool has_refc, template <typename> typename Allocator = std::allocator>
-class sview {
+class sview : private std::conditional_t<has_refc, RefCount, NoRefCount> {
 public:
     class ptr : public shared_ref_base<sview, has_refc, Allocator> {
     public:
@@ -178,14 +196,10 @@ public:
     std::string_view as_view() const noexcept { return { data(), size() }; }
     char* data_writable() noexcept { assert(is_writable()); return owning ? data_ : ptr_; }
     bool is_writable() const noexcept { return writable.load(std::memory_order_acquire); }
-    bool is_unique() const noexcept { return has_refc && refcount.load(std::memory_order_acquire) == 1; } //We are never unique if we do not manage refcount
+    bool is_unique() const noexcept { if constexpr (has_refc) return this->get_refcount() == 1; else return false; } //We are never unique if we do not manage refcount
     void make_read_only() noexcept { writable.store(false, std::memory_order_release); }
-    auto refc_inc() noexcept { return refcount.fetch_add(1, std::memory_order_acq_rel); }
-    auto refc_dec() noexcept { make_read_only(); return refcount.fetch_sub(1, std::memory_order_acq_rel); } //Once we have been referenced several times, multiple threads may have our content and can read us - no modification aferwards.
-    auto get_refcount() noexcept { return refcount.load(std::memory_order_acquire); }
 private:
     const uint32_t length; 
-    std::atomic<uint16_t> refcount = 1;
     std::atomic_bool writable;
 public:
     bool const owning;
@@ -197,10 +211,6 @@ private:
     };
     //delete the big five. The latter four would mess with the refount.
     sview() = delete;
-    sview(const sview&) = delete;
-    sview(sview&&) = delete;
-    sview& operator =(const sview&) = delete;
-    sview& operator =(sview&&) = delete;
     explicit sview(std::string_view s) noexcept : length(s.length()), writable(false), owning(false), ptr_(const_cast<char*>(s.data())) {}
     explicit sview(std::string &s) noexcept : length(s.length()), writable(true), owning(false), ptr_(s.data()) {}
     explicit sview(char *c, uint32_t len) noexcept : length(len), writable(true), owning(false), ptr_(c) {}
@@ -208,23 +218,6 @@ private:
         : length(l), writable(true), owning(true) { if (initial_data && l) memcpy(data_, initial_data, l); }
     ~sview() noexcept = default;
 };
-
-/** A reference count. This makes the descendant objects
- * non-copyable and non-movable as pointers point to it and
- * any such operation would mess with the refcount.*/
-struct RefCount {
-    RefCount() noexcept = default;
-    RefCount(const RefCount&) = delete;
-    RefCount(RefCount&&) noexcept = delete;
-    RefCount& operator=(const RefCount&) = delete;
-    RefCount& operator=(RefCount&&) = delete;
-    uint16_t refcount = 1;
-    auto refc_inc() noexcept { return ++refcount; }
-    auto refc_dec() noexcept { return --refcount; }
-    auto get_refcount() noexcept { return refcount; }
-};
-
-struct NoRefCount {};
 
 /// A chunk of a serialized uf::any that holds either a (part of a) typestring or some part of the value string.
 /// If a value string, it should contain one or more full basic types' worth of data.
