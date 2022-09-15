@@ -456,40 +456,37 @@ get_consecutive(typename chunk<has_refc, Allocator>::ptr from,
         return std::string_view{};
     auto b = from->data();
     auto l = from->size();
-    for (auto i = ++from; i && i != to; l += i->size(), ++i)
-        if (i->size() && b + l != i->data())
+    for (++from; from && from != to; l += from->size(), ++from)
+        if (from->size() && b + l != from->data())
             return {};
     return std::string_view{b,l};
 }
 
 /// @return the size required for storing the chunks in the given range
 template <bool has_refc, template <typename> typename Allocator>
-inline uint32_t flatten_size(typename chunk<has_refc, Allocator>::ptr const from,
-                             typename chunk<has_refc, Allocator>::ptr const to) noexcept
+inline uint32_t flatten_size(typename chunk<has_refc, Allocator>::ptr from,
+                             typename chunk<has_refc, Allocator>::ptr to) noexcept
 {
-    return std::accumulate(from, to, uint32_t{ 0 }, [](uint32_t n, auto &i) { return n + i.size(); });
+    return std::accumulate(std::move(from), std::move(to), uint32_t{ 0 }, [](uint32_t n, auto &i) { return n + i.size(); });
 }
 
 /// Stores chunk data starting at the given address.
 /// @param buf is assumed to accomodate flatten_size(from,to) bytes
 template <bool has_refc, template <typename> typename Allocator>
-inline void flatten_to(typename chunk<has_refc, Allocator>::ptr const from, 
-                       typename chunk<has_refc, Allocator>::ptr const to, 
+inline void flatten_to(typename chunk<has_refc, Allocator>::ptr from, 
+                       typename chunk<has_refc, Allocator>::ptr to, 
                        char *buf) noexcept {
-    if (auto v = get_consecutive<has_refc, Allocator>(from, to))
-        memcpy(buf, v->data(), v->size());
-    else
-        std::for_each(from, to, [&](auto& i){ memcpy(buf, i.data(), i.size()); buf += i.size(); });
+    std::for_each(std::move(from), std::move(to), [&](auto& i) { memcpy(buf, i.data(), i.size()); buf += i.size(); });
 }
 
 template <bool has_refc, template <typename> typename Allocator>
-inline string_variant flatten(typename chunk<has_refc, Allocator>::ptr const from, 
-                              typename chunk<has_refc, Allocator>::ptr const to)
+inline string_variant flatten(typename chunk<has_refc, Allocator>::ptr from, 
+                              typename chunk<has_refc, Allocator>::ptr to)
 {
     if (auto v = get_consecutive<has_refc, Allocator>(from, to)) return *v;
     std::string ret;
     ret.resize(flatten_size<has_refc, Allocator>(from, to));
-    flatten_to<has_refc, Allocator>(from, to, ret.data());
+    flatten_to<has_refc, Allocator>(std::move(from), std::move(to), ret.data());
     return ret;
 }
 
