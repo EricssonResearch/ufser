@@ -5,10 +5,14 @@
         <DisplayString Condition="!p-&gt;owning">{p-&gt;ptr_, [p-&gt;length]s} ({p-&gt;length})</DisplayString>
     </Type>
     <Type Name="uf::impl::chunk&lt;*&gt;">
-        <DisplayString Condition=" root.p-&gt;owning &amp;&amp; root.p-&gt;writable">{root.p-&gt;data_+off,[len]s}*</DisplayString>
-        <DisplayString Condition="!root.p-&gt;owning &amp;&amp; root.p-&gt;writable">{root.p-&gt;ptr_ +off,[len]s}*</DisplayString>
-        <DisplayString Condition=" root.p-&gt;owning &amp;&amp;!root.p-&gt;writable">{root.p-&gt;data_+off,[len]s}</DisplayString>
-        <DisplayString Condition="!root.p-&gt;owning &amp;&amp;!root.p-&gt;writable">{root.p-&gt;ptr_ +off,[len]s}</DisplayString>
+        <DisplayString Condition=" root.p-&gt;owning &amp;&amp; root.p-&gt;writable._Storage._Value &amp;&amp; len==4">{root.p-&gt;data_+off,[len]s} ({(int(root.p-&gt;data_[off])&lt;&lt;24)+(int(root.p-&gt;data_[off+1])&lt;&lt;16)+(int(root.p-&gt;data_[off+2])&lt;&lt;8)+int(root.p-&gt;data_[off+3])})</DisplayString>
+        <DisplayString Condition="!root.p-&gt;owning &amp;&amp; root.p-&gt;writable._Storage._Value &amp;&amp; len==4">{root.p-&gt;ptr_ +off,[len]s} ({(int(root.p-&gt;ptr_[off] )&lt;&lt;24)+(int(root.p-&gt;ptr_[off+1] )&lt;&lt;16)+(int(root.p-&gt;ptr_[off+2] )&lt;&lt;8)+int(root.p-&gt;ptr_[off+3])})</DisplayString>
+        <DisplayString Condition=" root.p-&gt;owning &amp;&amp;!root.p-&gt;writable._Storage._Value &amp;&amp; len==4">{root.p-&gt;data_+off,[len]s} ({(int(root.p-&gt;data_[off])&lt;&lt;24)+(int(root.p-&gt;data_[off+1])&lt;&lt;16)+(int(root.p-&gt;data_[off+2])&lt;&lt;8)+int(root.p-&gt;data_[off+3])})</DisplayString>
+        <DisplayString Condition="!root.p-&gt;owning &amp;&amp;!root.p-&gt;writable._Storage._Value &amp;&amp; len==4">{root.p-&gt;ptr_ +off,[len]s} ({(int(root.p-&gt;ptr_[off] )&lt;&lt;24)+(int(root.p-&gt;ptr_[off+1] )&lt;&lt;16)+(int(root.p-&gt;ptr_[off+2] )&lt;&lt;8)+int(root.p-&gt;ptr_[off+3])})</DisplayString>
+        <DisplayString Condition=" root.p-&gt;owning &amp;&amp; root.p-&gt;writable._Storage._Value">{root.p-&gt;data_+off,[len]s}*</DisplayString>
+        <DisplayString Condition="!root.p-&gt;owning &amp;&amp; root.p-&gt;writable._Storage._Value">{root.p-&gt;ptr_ +off,[len]s}*</DisplayString>
+        <DisplayString Condition=" root.p-&gt;owning &amp;&amp;!root.p-&gt;writable._Storage._Value">{root.p-&gt;data_+off,[len]s}</DisplayString>
+        <DisplayString Condition="!root.p-&gt;owning &amp;&amp;!root.p-&gt;writable._Storage._Value">{root.p-&gt;ptr_ +off,[len]s}</DisplayString>
         <Expand>
             <Item Name="[size]">len</Item>
             <Item Name="[addr]">root.p-&gt;owning ? root.p-&gt;data_+off : root.p-&gt;ptr_+off</Item>

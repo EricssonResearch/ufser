@@ -790,6 +790,9 @@ public:
         operator std::string() const { return p ? std::string(*p) : std::string("<empty>"); }
         /** Prints the chunks in a less verbose way. For debug only.*/
         [[nodiscard]] std::string print() const { return p ? p->print() : std::string("<empty>");; }
+
+        /** How long would our type be when flattened? */
+        uint32_t flatten_type_size() const noexcept { return p ? p->flatten_type_size() : 0; }
         /** How long would our value be when flattened? */
         uint32_t flatten_size() const noexcept { return p ? p->flatten_size() : 0; }
         /** Flatten our bytes to a pre-allocated buffer of appropriate size. */
@@ -1010,11 +1013,11 @@ public:
             if (o.typechar()) {
                 vb = vb->next = chunk_ptr(4);
                 char* p = vb->data_writable();
-                uf::impl::serialize_to(::uf::impl::flatten_size<has_refc, Allocator>(o->tbegin, o->tend), p);
+                uf::impl::serialize_to(o->flatten_type_size(), p);
                 vb = clone_into<has_refc, Allocator>(vb->next, o->tbegin, o->tend);
                 vb = vb->next = chunk_ptr(4);
                 p = vb->data_writable();
-                uf::impl::serialize_to(::uf::impl::flatten_size<has_refc, Allocator>(o->vbegin, o->vend), p);
+                uf::impl::serialize_to(o->flatten_size(), p);
                 clone_into<has_refc, Allocator>(vb->next, o->vbegin, o->vend);
             } else {
                 vb = vb->next = chunk_ptr(8);
@@ -1176,8 +1179,14 @@ public:
     }
 private:
 
-    bool check(std::string_view loc) const
-    {
+    //Go and check from the top wview
+    bool check(std::string_view loc) const {
+        if (parent) return parent->check(loc);
+        else return check_me(loc);
+    }
+
+    //check this wview and its children
+    bool check_me(std::string_view loc) const {
         //Check the type first
         //basic checks
         if (!tbegin) throw uf::value_mismatch_error(uf::concat("wany: empty tbegin at ", loc));
@@ -1198,7 +1207,7 @@ private:
         //Check that all our children are valid (before we flatten)
         for (auto &[index, wv] : children)
             if (!wv) throw uf::value_mismatch_error(uf::concat("wany: empty child of index #", index, " at ", loc), type().as_view());
-            else try { wv->check(LOC); } catch (uf::value_error &e) { e.append_msg(uf::concat(" from ", loc, " ", print())); throw; }
+            else try { wv->check_me(LOC); } catch (uf::value_error &e) { e.append_msg(uf::concat("\nfrom ", loc, " index #", index, " of ", print())); throw; }
         if (!std::is_sorted(children.begin(), children.end())) {
             std::string s;
             for (const child &c : children)
@@ -1223,10 +1232,7 @@ private:
     
     /// Return (a view into) the serialized value
     /// May copy.
-    string_variant value() const { 
-        calculate_any_sizes();
-        return flatten<has_refc, Allocator>(vbegin, vend);
-    }
+    string_variant value() const { return flatten<has_refc, Allocator>(vbegin, vend); }
 
     /// Return number of elements; 0 may mean that the we are not a container type
     uint32_t size() const noexcept {
@@ -1679,31 +1685,47 @@ private:
         return type_changed;
     }
 
+    void update_parent_any_sizes(int32_t diff) {
+        if (diff==0) return;
+        for (wview* p = this; p->parent; p=p->parent)
+            if (p->parent->typechar() == 'a') {
+                const uint32_t orig_len = uf::deserialize_as<uint32_t>(std::string_view(p->tend->data(), 4));
+                assert(0 <= int64_t(orig_len) + int64_t(diff));
+                assert(int64_t(orig_len) + int64_t(diff) < int64_t(std::numeric_limits<uint32_t>::max));
+                char* ptr = p->tend->data_writable();
+                uf::impl::serialize_to(uint32_t(orig_len+diff), ptr);
+            }
+    }
+
     /** Change the value and possibly type to that of the argument's.
-     * @throw error if changing the type is not allowed
-     */
-    wview& set(wview const& w) & {
+     * @throw error if changing the type is not allowed */
+    void set(wview const& w) & {
         //No-op on self-assign
-        if (&w == this) return *this;
+        if (&w == this) return;
         string_variant new_type = w.type();
         const bool type_changed = check_type_change(new_type.as_view(), "Cannot set element of <%1> to <%2>.");
         disown_children(false);
-        //Note: When we assign a value, we copy it, but not its children
-        //Any values may have incorrect tlen and vlen and we cannot parse
-        //them well for a child. So we correct the tlen and vlen here.
-        //Note: since we may copy here and loose parsed children relationships
-        //So it is important to calculate the length for all parsed children in w
-        //because after the copy we will not have them parsed in us.
-        w.calculate_any_sizes();
-        chunk_ptr new_tbegin;
-        bool adjust_type = false;
-        switch (parent ? parent->typechar() : 0) {
-        case 0: //No parent. Simply clone 'p'
+        if (!parent) { //No parent. Simply clone 'p'
             if (type_changed)
                 clone_into<has_refc, Allocator>(tbegin, w.tbegin, w.tend), tend = {};
             clone_into<has_refc, Allocator>(vbegin, w.vbegin, w.vend), vend = {};
             assert(check(LOC));
-            return *this;
+            return;
+        }
+        const char ptype = parent->typechar();
+        const uint32_t w_tlen = type_changed ? w.flatten_type_size() : 0; //computed only if type changed
+        const uint32_t w_vlen = w.flatten_size();
+        const uint32_t old_tlen = !type_changed
+            ? 0
+            : ptype == 'a'
+                ? uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) //faster than flatten_type_size
+                : flatten_type_size();
+        const uint32_t old_vlen = ptype == 'a'
+            ? uf::deserialize_as<uint32_t>(std::string_view(tend->data(), 4)) //faster than flatten_size
+            : flatten_size();
+        chunk_ptr new_tbegin;
+        bool adjust_type = false;
+        switch (ptype) {
         case 'a':
             //value of 'a' is parsed to <tlen> <type chunks...> <vlen> <value chunks...>
             assert(parent->vbegin->size() == 4);
@@ -1725,20 +1747,17 @@ private:
             clone_into<has_refc, Allocator>(vbegin, w.vbegin, w.vend, vend);
             if (new_tbegin)
                 tbegin->copy_from(std::move(*new_tbegin));
-            if (parent->typechar() == 'a') {
-                if (const uint32_t tlen = ::uf::impl::flatten_size<has_refc, Allocator>(w.tbegin, w.tend)
-                    ; uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) != tlen) {
+            if (ptype == 'a') {
+                if (old_tlen != w_tlen) {
                     char* p = parent->vbegin->data_writable();
-                    uf::impl::serialize_to(tlen, p);
+                    uf::impl::serialize_to(w_tlen, p);
                 }
-                if (const uint32_t vlen = ::uf::impl::flatten_size<has_refc, Allocator>(w.vbegin, w.vend)
-                    ; uf::deserialize_as<uint32_t>(std::string_view(tend->data(), 4)) != vlen) {
+                if (old_vlen != w_vlen) {
                     char* p = tend->data_writable();
-                    uf::impl::serialize_to(vlen, p);
+                    uf::impl::serialize_to(w_vlen, p);
                 }
             }
-            assert(check(LOC));
-            return *this;
+            goto update_parent_any_sizes;
         case 'x':
         case 'X':
             //value of expected is parsed as <has_value byte> <value chunks.../error chunks...>
@@ -1753,8 +1772,7 @@ private:
                 char c = 0;
                 val->assign(std::string_view(&c, 1));
                 clone_into<has_refc, Allocator>(val->next, w.vbegin, w.vend, vend);
-                assert(check(LOC));
-                return *this;
+                goto update_parent_any_sizes;
             } else if (type_changed)
                 //Set our type to that of the parent's (after the x or X, latter of which is void)
                 //since we can only change type with a non-'e' 'w' by changing from an 'e'
@@ -1777,49 +1795,62 @@ private:
                 tbegin = parent->tbegin->next;
                 tend = parent->tend;
             }
-            assert(check(LOC));
-            return *this;
+            goto update_parent_any_sizes;
         }
         assert(0);
-        return *this;
+    update_parent_any_sizes:
+        const int32_t diff = int32_t(w_tlen - old_tlen) + int32_t(w_vlen - old_vlen);
+        if (ptype == 'a') parent->update_parent_any_sizes(diff); //skip adjusting our parent, just do the parent's parent and up
+        else update_parent_any_sizes(diff);
+        assert(check(LOC));
     }
 
     /** Change the value and possibly type to that of the argument's.
      * We copy 'type' and 'value' so they can be discareded after the call.
      * @throw error if changing the type is not allowed*/
-    wview& set(std::string_view type, std::string_view value) & {
+    void set(std::string_view type, std::string_view value) & {
         const bool type_changed = check_type_change(type, "Cannot set element of <%1> to <%2>.");
         disown_children(false);
-        switch (parent ? parent->typechar() : 0) {
-        case 0: //No parent. Simply clone 'p'
+        if (!parent) {//No parent. Simply clone 'p'
             if (type_changed)
                 copy_into<has_refc, Allocator>(type, tbegin), tend = {};
             copy_into<has_refc, Allocator>(value, vbegin), vend = {};
             assert(check(LOC));
-            return *this;
+            return;
+        }
+        char const ptype = parent->typechar();
+        const uint32_t old_tlen = !type_changed
+            ? type.length() 
+            : ptype == 'a'
+                ? uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) //faster than flatten_type_size
+                : flatten_type_size();
+        const uint32_t old_vlen = ptype == 'a'
+            ? uf::deserialize_as<uint32_t>(std::string_view(tend->data(), 4))
+            : flatten_size();
+        switch (ptype) {
         case 'a':
             //value of 'a' is parsed to <tlen> <type chunks...> <vlen> <value chunks...>
             assert(parent->vbegin->size() == 4);
             assert(tend->size() == 4);
-            if (uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) != type.length()) {
+            if (old_tlen != type.length()) {
                 char* p = parent->vbegin->data_writable();
                 uf::impl::serialize_to(uint32_t(type.size()), p);
             }
-            if (uf::deserialize_as<uint32_t>(std::string_view(tend->data(), 4)) != value.length()) {
+            if (old_vlen != value.length()) {
                 char* p = tend->data_writable();
                 uf::impl::serialize_to(uint32_t(value.size()), p);
             }
             [[fallthrough]];
         case 't':
-            if (type_changed)
+            if (type_changed) {
                 copy_into<has_refc, Allocator>(type, tbegin, tend);
+            }
             [[fallthrough]];
         case 'l':
         case 'm':
         case 'e':
             copy_into<has_refc, Allocator>(value, vbegin, vend);
-            assert(check(LOC));
-            return *this;
+            goto update_parent_any_sizes;
         case 'x':
         case 'X':
             //value of expected is parsed as <has_value byte> <value chunks.../error chunks...>
@@ -1833,8 +1864,7 @@ private:
                 char c = 0;
                 val->assign(std::string_view(&c, 1));
                 copy_into<has_refc, Allocator>(value, val->next, vend);
-                assert(check(LOC));
-                return *this;
+                goto update_parent_any_sizes;
             } else if (type_changed) {
                 //Need to restore the parent's type
                 tbegin = parent->tbegin->next;
@@ -1849,11 +1879,14 @@ private:
             char c = 1;
             val->assign(std::string_view(&c, 1));
             copy_into<has_refc, Allocator>(value, val->next, vend);
-            assert(check(LOC));
-            return *this;
+            goto update_parent_any_sizes;
         }
         assert(0);
-        return *this;
+    update_parent_any_sizes:
+        const int32_t diff = int32_t(type.length() - old_tlen) + int32_t(value.length() - old_vlen);
+        if (ptype == 'a') parent->update_parent_any_sizes(diff);
+        else update_parent_any_sizes(diff);
+        assert(check(LOC));
     }
     
     /** Returns the index in children of what or nothing if not our child.*/
@@ -1882,6 +1915,7 @@ private:
         assert(check(LOC));
         assert(children.size() > cindex);
         uint32_t new_size = size()-1;
+        int32_t size_diff = 0;
         switch (typechar()) {
         default: return true;
         case 'o': //set the has_value byte to zero
@@ -1907,6 +1941,7 @@ private:
             assert(new_size);
             if (new_size==1)
                 return true;
+            size_diff -= children[cindex].second->flatten_type_size();         //We insert remove this from the typestring
             //unlink the type
             auto tprev = find_before<has_refc, Allocator>(
                 children[cindex].second->tbegin,
@@ -1918,6 +1953,7 @@ private:
                 //decrement the size field at the beginning
             std::string new_len = uf::concat('t', new_size);
             tbegin->assign(std::string_view(new_len));
+            if (new_size == 9 || new_size == 99 || new_size == 999 || new_size == 9999) size_diff--; //The size in the typestring requires less digits t10->t9
         }
         //unlink the data
         auto vprev = find_before<has_refc, Allocator>(
@@ -1931,13 +1967,16 @@ private:
         for (size_t i = cindex + 1; i < children.size(); i++)
             children[i].first--;
         //disown and delete this guy from children
+        size_diff -= children[cindex].second->flatten_size();         //We insert remove this from the value
         disown_child(cindex, typechar()!='t', false);
         children.erase(children.begin() + cindex);
+        update_parent_any_sizes(size_diff);
         assert(check(LOC));
         return false;
     }
 
     bool do_insert_after(int cindex, const wview& what) {
+        int32_t size_diff = 0;
         switch (typechar()) {
         default: return true;
         case 'o': {
@@ -1982,14 +2021,17 @@ private:
                                                   ::uf::impl::flatten_size<has_refc, Allocator>(
                                                       p->tbegin, cindex<0 ? tbegin->next : children[cindex].second->tend));
             //increment the size field at the beginning
-            std::string new_len = uf::concat('t', size()+1);
+            uint32_t size = this->size();
+            if (size == 9 || size == 99 || size == 999 || size == 9999) size_diff++; //The typestring will increase in length t9->t10.
+            std::string new_len = uf::concat('t', size+1);
+            size_diff += what.flatten_type_size();         //We insert this into the typestring
             tbegin->assign(std::string_view(new_len));
             //link in a clone of the type of 'what'
             const chunk_ptr& link_after = cindex < 0 ? 
                 tbegin : 
                 find_before<has_refc, Allocator>(children[cindex].second->tend,
-                                                     children[cindex].second->tbegin,
-                                                     children[cindex].second->tend);
+                                                 children[cindex].second->tbegin,
+                                                 children[cindex].second->tend);
             chunk_ptr tcopy;
             clone_into<has_refc, Allocator>(tcopy, what.tbegin, what.tend, link_after->next);
             link_after->next = std::move(tcopy);
@@ -2021,6 +2063,10 @@ private:
         //increase the index of everyone behind us in 'children'
         for (size_t i = cindex + 1; i < children.size(); i++)
             children[i].first++;
+
+        //Adjust parent's any sizes
+        size_diff += what.flatten_size();         //We insert this into the value
+        update_parent_any_sizes(size_diff);
         assert(check(LOC));
         return false;
     }
@@ -2127,53 +2173,15 @@ private:
         }
         return {};
     }
+    /// Calculate flattened type string byte size
+    uint32_t flatten_type_size() const noexcept { return impl::flatten_size<has_refc, Allocator>(tbegin, tend); }
     //Any optimization with wview& set(wview&& p) ?
     /// Calculate flattened value string byte size
     uint32_t flatten_size() const noexcept { return impl::flatten_size<has_refc, Allocator>(vbegin, vend); }
     
-    /** Recursively traverses our children and in all parsed
-     * wview of 'a' type we calculate the type and value length.
-     * Needed to be called before flatten().*/
-    void calculate_any_sizes() const
-    {
-        if (children.empty()) return;
-        if (typechar() == 'a') {
-            char tlen[4], vlen[4];
-            char* ptlen = tlen, *pvlen = vlen;
-            const wview& child = *children.front().second;
-            serialize_to(impl::flatten_size<has_refc, Allocator>(child.tbegin, child.tend), ptlen);
-            serialize_to(impl::flatten_size<has_refc, Allocator>(child.vbegin, child.vend), pvlen);
-            assert(vbegin->size() >= 4);
-            assert(child.tend->size() >= 4);
-            if (vbegin->as_view().substr(0, 4) != std::string_view(tlen, 4)) {
-                //Update type length if changed
-                if (vbegin->is_writable())
-                    memcpy(vbegin->data_writable(), tlen, 4);
-                else {
-                    if (vbegin->size() > 4) split<has_refc, Allocator>(vbegin, 4);
-                    vbegin->assign(std::string_view(tlen, 4));
-                }
-            }
-            if (child.tend->as_view().substr(0, 4) != std::string_view(vlen, 4)) {
-                //Update value length if changed (comes after the child's type)
-                if (child.tend->is_writable())
-                    memcpy(child.tend->data_writable(), vlen, 4);
-                else {
-                    if (child.tend->size() > 4) split<has_refc, Allocator>(child.tend, 4);
-                    child.tend->assign(std::string_view(vlen, 4));
-                }
-            }
-        }
-        for (auto& w : children)
-            w.second->calculate_any_sizes();
-    }
-
     /// Copy flattened value bytes to buf
     /// @param buf should have size returned by flatten_size
-    void flatten_to(char *buf) const {
-        calculate_any_sizes();
-        impl::flatten_to<has_refc, Allocator>(vbegin, vend, buf);
-    }
+    void flatten_to(char *buf) const { impl::flatten_to<has_refc, Allocator>(vbegin, vend, buf); }
     
     operator std::string() const {
         std::string ret = "wv{type: [";

@@ -1193,3 +1193,50 @@ TEST_CASE("JSON insert") {
     CHECK(json.as_any().as_view().print() == R"(<msa>{"aa":<i>5,"bb":<i>6})");
     CHECK(json2.as_any().as_view().print() == R"(<msa>{"aa":<msa>{"aa":<i>5,"bb":<i>6},"bb":<i>5})");
 }
+
+TEST_CASE("Multi-level any") {
+    using namespace std::literals;
+    std::string_view json=R"({"header":{"ch":"UE","obj_id":"1","type":"aa","req_id":""},"payload":{"boff":"buff"}})";
+    std::string v;
+    auto [t, invalid] = uf::impl::parse_value(v, json, uf::impl::ParseMode::JSON_Loose);
+    REQUIRE(!invalid);
+    CHECK(t == "msa");
+    uf::wview msg{std::string_view(t), std::string_view(v)}; //This is a memcopy of both the type and value, making this json owning these areas.
+    auto [res, err] = msg.linear_search(uf::wview("header"), 0);
+    REQUIRE(err.empty());
+    REQUIRE(res);
+    uf::wview hdr = res[1][0];
+
+    auto [res2, err2] = hdr.linear_search(uf::wview("req_id"), 0);
+    REQUIRE(err2.empty());
+    REQUIRE(res2);
+    uf::wview req_id = res2[1][0];
+
+    //This is what this test verifies:
+    //we set the content of an any, which itself is in the content of an any
+    //In old times we did not update any sizes all the way up to the top parent
+    //so the top any sizes were wrong.
+    req_id.set("aaa");
+    
+    auto [res3, err3] = msg.linear_search(uf::wview("id"), 0);
+    REQUIRE(err3.empty());
+    REQUIRE(!res3);
+}
+
+TEST_CASE("Multi-level any 2") {
+    std::vector<uf::any> la = {uf::any(1), uf::any(2)};
+    la.push_back(uf::any(la));
+    uf::wview vla(la);
+    CHECK(vla.as_any().as_view().print() == "<la>[<i>1,<i>2,<la>[<i>1,<i>2]]");
+    REQUIRE_NOTHROW(vla[2][0][1][0].set(42));
+    REQUIRE_NOTHROW(vla.check(LOC));
+    CHECK(vla.as_any().as_view().print() == "<la>[<i>1,<i>2,<la>[<i>1,<i>42]]");
+
+    REQUIRE_NOTHROW(vla[2][0].insert_after(1, uf::wview(uf::any(4242))));
+    REQUIRE_NOTHROW(vla.check(LOC));
+    CHECK(vla.as_any().as_view().print() == "<la>[<i>1,<i>2,<la>[<i>1,<i>42,<i>4242]]");
+
+    REQUIRE_NOTHROW(vla[2][0].erase(0));
+    REQUIRE_NOTHROW(vla.check(LOC));
+    CHECK(vla.as_any().as_view().print() == "<la>[<i>1,<i>2,<la>[<i>42,<i>4242]]");
+}
