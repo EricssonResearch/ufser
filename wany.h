@@ -74,20 +74,20 @@ protected:
 public:
     constexpr static bool has_refcount = has_refc;
     shared_ref_base() noexcept = default;
-    shared_ref_base(const shared_ref_base & o) noexcept : p(o.p) { 
-        if constexpr (has_refc) 
+    shared_ref_base(const shared_ref_base & o) noexcept : p(o.p) {
+        if constexpr (has_refc)
             if (p) { [[maybe_unused]] auto c = p->refc_inc(); assert(c); }
     }
     shared_ref_base(shared_ref_base && o) noexcept : p(o.p) { o.p = nullptr; }
-    shared_ref_base& operator =(const shared_ref_base & o) noexcept { 
-        if (this != &o) { 
-            if constexpr (has_refc) { 
-                unref(); 
+    shared_ref_base& operator =(const shared_ref_base & o) noexcept {
+        if (this != &o) {
+            if constexpr (has_refc) {
+                unref();
                 if (o.p) { [[maybe_unused]] auto c = o.p->refc_inc(); assert(c); }
-            } 
+            }
             p = o.p;
-        } 
-        return *this; 
+        }
+        return *this;
     }
     shared_ref_base& operator =(shared_ref_base && o) noexcept { if (this != &o) { unref(); p = o.p; o.p = nullptr; } return *this; }
     ~shared_ref_base() noexcept { unref(); }
@@ -199,7 +199,7 @@ public:
     bool is_unique() const noexcept { if constexpr (has_refc) return this->get_refcount() == 1; else return false; } //We are never unique if we do not manage refcount
     void make_read_only() noexcept { writable.store(false, std::memory_order_release); }
 private:
-    const uint32_t length; 
+    const uint32_t length;
     std::atomic_bool writable;
 public:
     bool const owning;
@@ -230,10 +230,10 @@ class chunk : private std::conditional_t<has_refc, RefCount, NoRefCount> {
     uint32_t len;   ///< size of this view
 
     /** Allocate a new owning/writable chunk */
-    explicit chunk(uint32_t l) : root(l), off(0), len(l) 
+    explicit chunk(uint32_t l) : root(l), off(0), len(l)
     { assert(l <= std::numeric_limits<decltype(len)>::max()); }
     /** Sub-chunk of an existing shared string (writable or non-writable alike) */
-    explicit chunk(char const* b, uint32_t l, sview_ptr&& r) noexcept : 
+    explicit chunk(char const* b, uint32_t l, sview_ptr&& r) noexcept :
         root(std::move(r)), off(b - root->data()), len(l) {
         assert(l <= std::numeric_limits<decltype(len)>::max());
         assert(!l || root);
@@ -250,10 +250,10 @@ public:
     public:
         using shared_ref_base<chunk, has_refc, Allocator>::shared_ref_base;
 
-        explicit ptr(uint32_t l) { 
+        explicit ptr(uint32_t l) {
             char* mem = Allocator<char>().allocate(sizeof(chunk));
             //This chunk ctor may throw, so deallocate if it does.
-            try { p = new(mem) chunk(l); } 
+            try { p = new(mem) chunk(l); }
             catch (...) { Allocator<char>().deallocate(mem, sizeof(chunk)); throw; }
         }
         /** Sub-chunk of an existing shared string (writable or non-writable alike) */
@@ -263,7 +263,7 @@ public:
         explicit ptr(sview_ptr&& r)
         { p = new(Allocator<char>().allocate(sizeof(chunk))) chunk(std::move(r)); } //non-throwing chunk ctor
 
-        ptr& operator++() noexcept { 
+        ptr& operator++() noexcept {
             if (p) *this = p->next;
             return *this;
         }
@@ -275,22 +275,22 @@ public:
     };
     friend class shared_ref_base<chunk, has_refc, Allocator>;
     ptr next;///< The next item in a forward list of chunks connected to the same wview
-    
+
     static constexpr size_t get_memsize() noexcept { return sizeof(chunk); }
     char const* data() const noexcept { return root ? root->data() + off : nullptr; }
-    char* data_writable() noexcept { 
+    char* data_writable() noexcept {
         if (!root) return nullptr;
-        //since for writable only we own 'root' (refocunt must be 1), 
+        //since for writable only we own 'root' (refocunt must be 1),
         //there is no chance of a change of writable status between this check and the final line
-        if (!root->is_writable()) { 
+        if (!root->is_writable()) {
             root = root.clone(off, len);
             off = 0;
         }
-        return root->data_writable()+off; 
+        return root->data_writable()+off;
     }
     uint32_t size() const noexcept { return len; }
     std::string_view as_view() const noexcept {return std::string_view{data(), size()}; }
-    
+
     /// @name Chunk pointer builders
     /// @{
     /// Creates a chunk from us using offset and length. The next field is set to null. Excess length is trimmed.
@@ -301,7 +301,7 @@ public:
     /// Creates copy of us with next set to null.
     ptr clone() const { return sub_chunk(0); }
     /// @}
-    
+
     /** Ensures that the current chunk is writable, and at least this big and returns a writable char array.
      * If not writable or not large enough, we allocate (and loose existing content)
      * We pay attention to preserve the 'next' field.*/
@@ -382,7 +382,7 @@ template <bool has_refc, template <typename> typename Allocator>
 inline std::string to_string(typename chunk<has_refc, Allocator>::ptr i) { return i ? std::string(*i) : ""; }
 
 /** Clones a linked list of chunks ['begin'..'end'). It also clones the underlying sviews if not read-only.
- * If 'into' is empty, a new first element will be allocated. If not empty, the first element will be copied to 
+ * If 'into' is empty, a new first element will be allocated. If not empty, the first element will be copied to
  * 'into'. The end will point to 'new_end'.
  * If into is the same as begin, then we create a new chunk in it - effectively creating a new chunk list head.
  * @returns the last chunk ('next' member of which was set to 'new_end')*/
@@ -407,10 +407,10 @@ clone_into(typename chunk<has_refc, Allocator>::ptr& into,
     //Only after we have created the copy shall we modify 'begin' as 'begin may be part of the chain we have copied.
     if (into == begin || !into)
         into = std::move(start);
-    else 
+    else
         into->copy_from(*start);
     //Then make the (potentially merged) sviews read-only or single-owner
-    for (auto c = into; c!=new_end; c = c->next) 
+    for (auto c = into; c!=new_end; c = c->next)
         c->unshare();
     return out;
 }
@@ -428,7 +428,7 @@ inline typename chunk<has_refc, Allocator>::ptr clone_anew(typename chunk<has_re
 }
 
 template <bool has_refc, template <typename> typename Allocator>
-inline void copy_into(std::string_view what, 
+inline void copy_into(std::string_view what,
                       typename chunk<has_refc, Allocator>::ptr& into,
                       typename chunk<has_refc, Allocator>::ptr end = {})
 {
@@ -439,11 +439,11 @@ inline void copy_into(std::string_view what,
     into->next = end;
 }
 
-/// @return a (char*,len) pair to the whole range if it is consecutive in memory, 
+/// @return a (char*,len) pair to the whole range if it is consecutive in memory,
 /// (may also be a a single empty chunk: {"",0}), or an empty optional if not consecutive
 template <bool has_refc, template <typename> typename Allocator>
-inline std::optional<std::string_view> 
-get_consecutive(typename chunk<has_refc, Allocator>::ptr from, 
+inline std::optional<std::string_view>
+get_consecutive(typename chunk<has_refc, Allocator>::ptr from,
                 typename chunk<has_refc, Allocator>::ptr const to) noexcept {
     if (!from || from==to)
         return std::string_view{};
@@ -466,14 +466,14 @@ inline uint32_t flatten_size(typename chunk<has_refc, Allocator>::ptr from,
 /// Stores chunk data starting at the given address.
 /// @param buf is assumed to accomodate flatten_size(from,to) bytes
 template <bool has_refc, template <typename> typename Allocator>
-inline void flatten_to(typename chunk<has_refc, Allocator>::ptr from, 
-                       typename chunk<has_refc, Allocator>::ptr to, 
+inline void flatten_to(typename chunk<has_refc, Allocator>::ptr from,
+                       typename chunk<has_refc, Allocator>::ptr to,
                        char *buf) noexcept {
     std::for_each(std::move(from), std::move(to), [&](auto& i) { memcpy(buf, i.data(), i.size()); buf += i.size(); });
 }
 
 template <bool has_refc, template <typename> typename Allocator>
-inline string_variant flatten(typename chunk<has_refc, Allocator>::ptr from, 
+inline string_variant flatten(typename chunk<has_refc, Allocator>::ptr from,
                               typename chunk<has_refc, Allocator>::ptr to)
 {
     if (auto v = get_consecutive<has_refc, Allocator>(from, to)) return *v;
@@ -515,15 +515,15 @@ inline bool startswidth(typename chunk<has_refc, Allocator>::ptr from1, size_t o
 
 /// Call the functor with each non-empty chunk
 template <bool has_refc, template<typename> typename Allocator, typename F>
-inline void for_nonempty(typename chunk<has_refc, Allocator>::ptr const from, 
-                         typename chunk<has_refc, Allocator>::ptr const to, 
+inline void for_nonempty(typename chunk<has_refc, Allocator>::ptr const from,
+                         typename chunk<has_refc, Allocator>::ptr const to,
                          F&& f)
 { std::for_each(from, to, [f=std::move(f)](auto& i){ if (i.size()) f(i); }); }
 
 /// Return the first non-empty chunk, or null
 template <bool has_refc, template <typename> typename Allocator>
-inline typename chunk<has_refc, Allocator>::ptr const 
-find_nonempty(typename chunk<has_refc, Allocator>::ptr const from, 
+inline typename chunk<has_refc, Allocator>::ptr const
+find_nonempty(typename chunk<has_refc, Allocator>::ptr const from,
               typename chunk<has_refc, Allocator>::ptr const to = {}) noexcept {
     auto i = std::find_if(from, to, [](auto& i){ return i.size(); });
     return i != to ? i : typename chunk<has_refc, Allocator>::ptr{};
@@ -532,9 +532,9 @@ find_nonempty(typename chunk<has_refc, Allocator>::ptr const from,
 /// Return the chunk before 'what' or null if 'what' is not on the list or equal to 'from'
 /// 'what' may be equal to 'to'
 template <bool has_refc, template <typename> typename Allocator>
-inline typename chunk<has_refc, Allocator>::ptr 
+inline typename chunk<has_refc, Allocator>::ptr
 find_before(typename chunk<has_refc, Allocator>::ptr const &what,
-            typename chunk<has_refc, Allocator>::ptr const& from, 
+            typename chunk<has_refc, Allocator>::ptr const& from,
             typename chunk<has_refc, Allocator>::ptr const& to = {}) noexcept
 {
     auto i = std::find_if(from, to, [&what](auto& c) { return what == c.next; });
@@ -545,8 +545,8 @@ find_before(typename chunk<has_refc, Allocator>::ptr const &what,
  * Return true if we have run out of chunks - in that case the value in 'ch_off' is undetermined.
  * It is also possible to have a ch_off.second that is already pointing beyond the end of ch_off.first.*/
 template <bool has_refc, template <typename> typename Allocator>
-inline bool advance(typename std::pair<typename chunk<has_refc, Allocator>::ptr, uint32_t>& ch_off, 
-                    uint32_t off, 
+inline bool advance(typename std::pair<typename chunk<has_refc, Allocator>::ptr, uint32_t>& ch_off,
+                    uint32_t off,
                     typename chunk<has_refc, Allocator>::ptr const& to = {})
 {
     assert(ch_off.first);
@@ -603,7 +603,7 @@ typename chunk<has_refc, Allocator>::ptr split(typename chunk<has_refc, Allocato
     }
 }
 
-/** Split a chunk into two. 
+/** Split a chunk into two.
  * If off==size(), nothing happens and we return c->next (even if off==0)
  * If off==0, but size()>0 nothing happens and we return c.
  * We keep the split sub-chunks properly linked.
@@ -681,18 +681,18 @@ public:
 
         /** This constructor is technically public, since we need it when emplacing to 'children'
          * Do not use otherwise.*/
-        explicit ptr(chunk_ptr&& tb, chunk_ptr&& te, 
+        explicit ptr(chunk_ptr&& tb, chunk_ptr&& te,
                      chunk_ptr&& vb, const chunk_ptr& ve, wview *parent)
         { p = new(Allocator<char>().allocate(sizeof(wview))) wview(std::move(tb), std::move(te), std::move(vb), ve, parent); } //noexcept wview ctor
         /** Construct a wview from a read-only or writable type/value pair.
-         * Note that sview::ptr can be initialized from std::string_view or std::string{&,&&} with 
+         * Note that sview::ptr can be initialized from std::string_view or std::string{&,&&} with
          * an optional second bool parameter, which dictates if we copy the data or the lifetime of
          * the provided object outlives the wview created. (Defaults to true, meaning copy.)
          * For std::string&& no second parameter is possible, we make a copy in any case.
          * For (std::string&, false) the memory provided will be written in case the wview is modified.
          * (But it no longer may be used as a serialized value or a coherent typestring, it becomes
          *  essentially random.)*/
-        explicit ptr(sview_ptr &&t, sview_ptr &&v) { 
+        explicit ptr(sview_ptr &&t, sview_ptr &&v) {
             char* mem = Allocator<char>().allocate(sizeof(wview));
             try { p = new(mem) wview(std::move(t), std::move(v)); }
             catch (...) { Allocator<char>().deallocate(mem, sizeof(wview)); throw; }
@@ -707,27 +707,27 @@ public:
          *  essentially random.)*/
         explicit ptr(sview_ptr&& raw) {
             char* mem = Allocator<char>().allocate(sizeof(wview));
-            try { p = new(mem) wview(std::move(raw)); } 
+            try { p = new(mem) wview(std::move(raw)); }
             catch (...) { Allocator<char>().deallocate(mem, sizeof(wview)); throw; }
         }
         /** Constructs a wview by serializing a C++ type.*/
         template<typename T>
-        explicit ptr(T const& t) { 
+        explicit ptr(T const& t) {
             static_assert(is_serializable_v<T>);
             char* mem = Allocator<char>().allocate(sizeof(wview));
             try { p = new(mem) wview(t); }
             catch (...) { Allocator<char>().deallocate(mem, sizeof(wview)); throw; }
         }
-        /** Construct a wview from an any. If you write anything in the resulting wview, 
+        /** Construct a wview from an any. If you write anything in the resulting wview,
          * the memory area of the 'any' may be overwritten rendering the 'any' invalid.
          * Thus do not use the supplied 'any' after this ctor - but keep it allocated
          * as the resulting wview refers to it. The lifetime of the supplied 'any'
          * (even if it enters an undefined, but destoryable state) shall be longer than
          * that of the resulting wview.
-         * This is done to save on memory allocations and copies. If you want the 
+         * This is done to save on memory allocations and copies. If you want the
          * 'any' to remain utouched, use a const ref or an any_view.*/
         explicit ptr(uf::from_raw_t, uf::any& a)
-            : ptr(sview_ptr(a.type().size(),  const_cast<char*>(a.type().data()),  false), 
+            : ptr(sview_ptr(a.type().size(),  const_cast<char*>(a.type().data()),  false),
                   sview_ptr(a.value().size(), const_cast<char*>(a.value().data()), false)) {}
 
         /** Construct a wview from an any_view. This is a no-copy operation.
@@ -740,11 +740,13 @@ public:
         ptr(const ptr&) noexcept = default;
         ptr(ptr&&) noexcept = default;
         /** To avoid wv1[0] = wv2 type of operations.
-         * These are a no-op (assigning one iterator to a temporary iterator) 
+         * These are a no-op (assigning one iterator to a temporary iterator)
          * and are almost always 'intend wv1[0].set(wv2)'. */
         ptr&& operator =(const ptr&) && = delete;
         ptr& operator =(const ptr&) & noexcept = default;
         ptr& operator =(ptr&&) & noexcept = default;
+
+        bool is_same_as(const ptr& o) const noexcept { return p == o.p; }
 
         /** Returns our type character or zero if empty.*/
         char typechar() const noexcept { return p ? p->typechar() : 0; }
@@ -768,8 +770,8 @@ public:
             return {}; //Safely ignore "'<anonymous>' may be used uninitialized in this function" warnings. See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=80635
 #pragma GCC diagnostic pop
         }
-        /** Try to extract the content of us into a C++ value. 
-         * We throw uf::type_mismatch_error if we cannot. No conversion 
+        /** Try to extract the content of us into a C++ value.
+         * We throw uf::type_mismatch_error if we cannot. No conversion
          * For uf::any or uf::any_view consider using as_any() instead.*/
         template<typename T>
         auto get_as(uf::serpolicy convpolicy = uf::allow_converting_all) const {
@@ -802,11 +804,11 @@ public:
          *  must be lower than size() (or we throw std::out_of_range).
          * For types having no constitutent, we throw uf::type_mismatch_error.*/
         ptr operator[](uint32_t idx) const { return p ? p->operator[](idx) : ptr{}; }
-        
+
         /** Set the value pointed to by us to the content of another wview. We make a copy,
          * so there is no link remaining between the wview we change and 'o', so chaning 'o'
          * will have no effect on 'this' or its parents.
-         * If we have wviews to any of our constitutent elements, we break any link with them: 
+         * If we have wviews to any of our constitutent elements, we break any link with them:
          * any such wviews continue to hold their value, but changes to them will have no effect
          * on 'this' or any parent of it.
          * If a type change is not possible, but needed we throw an uf::type_mismatch_error.*/
@@ -868,8 +870,8 @@ public:
          * If a type change is not possible, but needed we throw an uf::type_mismatch_error.*/
         ptr&& set_void() && { return std::move(*this).set({}, {}); }
 
-        /** Erase one of our constitutent. 
-         * We throw an std::out_of_range if 'idx' is >= size(). 
+        /** Erase one of our constitutent.
+         * We throw an std::out_of_range if 'idx' is >= size().
          * If this incurs a type change (for tuples), and that is not possible, we throw
          * an uf::type_mismatch_error.*/
         void erase(uint32_t idx) {
@@ -924,7 +926,7 @@ public:
             if (p->do_insert_after(cindex, *what))
                 throw uf::type_mismatch_error("Cannot insert a child into <%1>.", type(), {});
         }
-        /** Insert one more constitutent after 'where'. 
+        /** Insert one more constitutent after 'where'.
          * We throw an std::invalid_argument if 'where' is not a member of us.
          * If this incurs a type change (for tuples), and that is not possible, we throw
          * an uf::type_mismatch_error.
@@ -941,7 +943,7 @@ public:
         }
 
         /** Creates a copy of the current wview, with creating new chunks.
-         * @returns a wview with no parents that can be modified without 
+         * @returns a wview with no parents that can be modified without
          * modifying 'this'.*/
         ptr clone() const {
             return p ? ptr{ impl::clone_anew<has_refc, Allocator>(p->tbegin, p->tend), {},
@@ -979,7 +981,7 @@ public:
 
         /** Create a wview containing an expected with the error provided.
          * We copy 'o' so it will not be linked to the result in any way.
-         * @param [in] o An wview containing an error. 
+         * @param [in] o An wview containing an error.
          * @param [in] type The type of the expected (without the leading 'x').
          * @returns null, if 'o' does not contain an error.*/
         static ptr create_expected_from_error(const ptr& o, std::string_view type)
@@ -996,18 +998,18 @@ public:
             return ptr(std::move(tb), chunk_ptr(), std::move(vb), chunk_ptr(), nullptr);
         }
 
-        /** Creates an 'e' error wview. The last parameter can be omitted. If not, 
+        /** Creates an 'e' error wview. The last parameter can be omitted. If not,
          * it will be cloned into the result and unlinked from 'o'.
          * Also the string views will be taken a snapshot of and copied.*/
         static ptr create_error(std::string_view type, std::string_view message, const ptr &o = {})
         {
-            sview_ptr t(uf::impl::serialize_len(   type)); 
-            sview_ptr m(uf::impl::serialize_len(message)); 
+            sview_ptr t(uf::impl::serialize_len(   type));
+            sview_ptr m(uf::impl::serialize_len(message));
             char* tp = t->data_writable();
-            char* mp = m->data_writable(); 
+            char* mp = m->data_writable();
             uf::impl::serialize_to(type, tp);
             uf::impl::serialize_to(message, mp);
-            
+
             chunk_ptr vb = chunk_ptr(std::move(t)), vbegin = vb;
             vb = vb->next = chunk_ptr(std::move(m));
             if (o.typechar()) {
@@ -1029,7 +1031,7 @@ public:
         /** Create a wview containing a tuple with the values (and types) provided.
          * We copy the incoming wviews so it will not be linked to the result in any way.
          * void or empty incoming wviews will be ignored. If we receive zero non-void wviews
-         * we return void. If we receive one non-void wview, we return an unlinked 
+         * we return void. If we receive one non-void wview, we return an unlinked
          * copy of it.*/
         static ptr create_tuple_from(const std::vector<wview::ptr>& o)
         {
@@ -1050,7 +1052,7 @@ public:
             return ptr(std::move(tbegin), {}, std::move(vbegin), {}, nullptr);
         }
 
-        /** Swap the content with that of 'w'. 
+        /** Swap the content with that of 'w'.
          * E.g., this allows to set a value in a tuple or list, but get the previous value out.
          * We assert if either of us is empty.
          * @exception uf::type_mismatch_error we cannot set one of the wviews because its parent limits the type.
@@ -1088,14 +1090,14 @@ public:
             //Dont swap the tends. Those point to a chunk not affected by the swap.
             //Keep parsed children alive. Note: no children uses our tbegin or vbegin, so it safe
             std::swap(p->children, w.p->children);
-            //And we keep our parents intact. Swapping content keeps 
+            //And we keep our parents intact. Swapping content keeps
             assert(p->check(LOC));
             assert(w->check(LOC));
         }
 
         /** Fast searching in lists in maps. We do not create children, only for
          * the element found. For lists, we can only serarch by the beginning of the
-         * serialized value of the elements of 'l', for maps we only search by the 
+         * serialized value of the elements of 'l', for maps we only search by the
          * beginning of the key value of 'm'.
          * Only exact type matches expected and only exact value matches are found.
          * For this to work:
@@ -1103,7 +1105,7 @@ public:
          * - 't' has to be a tuple T2
          * - the first 'n' fields of T1 and T2 must be the same.
          * Alternatively if n==1, then either T1 or T2 is allowed to be a non tuple.
-         * Alternatively, if n==0, all of 't' is matched against the first member 
+         * Alternatively, if n==0, all of 't' is matched against the first member
          * of 'this's content (for lists) or key (for maps) (or all its content/key if not a tuple).
          * For example
          * this=lt3iis, t=t2ii, n=2 will search by two integers.
@@ -1148,27 +1150,27 @@ public:
     //wview& operator =(wview&&) noexcept = default;
     ~wview() { disown_children(true); }
 
-    explicit wview(chunk_ptr &&tb, chunk_ptr &&te, 
+    explicit wview(chunk_ptr &&tb, chunk_ptr &&te,
                    chunk_ptr &&vb, const chunk_ptr &ve, wview *p) noexcept
-        : tbegin(std::move(tb)), tend(std::move(te)), vbegin(std::move(vb)), vend(ve), parent(p) 
+        : tbegin(std::move(tb)), tend(std::move(te)), vbegin(std::move(vb)), vend(ve), parent(p)
     { assert(check(LOC)); }
 
     /// Initialize a view with a type string and a value string
-    explicit wview(sview_ptr &&t, sview_ptr &&v) 
-        : tbegin(std::move(t)), vbegin(std::move(v)) 
+    explicit wview(sview_ptr &&t, sview_ptr &&v)
+        : tbegin(std::move(t)), vbegin(std::move(v))
     {
         auto [err, tlen, vlen] = serialize_scan_by_type(tbegin->as_view(), vbegin->as_view(), false, true); //Test if type matches the value
         (void)tlen, (void)vlen;
-        if (err) err->throw_me(); 
-    } 
-    
+        if (err) err->throw_me();
+    }
+
     /// Initialize a view with a serialized any (tlen-type-vlen-value)
-    explicit wview(sview_ptr &&raw) { 
+    explicit wview(sview_ptr &&raw) {
         const uf::any_view a(from_raw, raw->as_view()); //Tests if type matches the value
         tbegin = chunk_ptr(a.type().data(), a.type().length(), sview_ptr(raw));
         vbegin = chunk_ptr(a.value().data(), a.value().length(), sview_ptr(raw));
     }
-    
+
     /// Create a view from any appropriate type
     template<typename T>
     explicit wview(T const& t) : tbegin{ chunk_ptr(sview_ptr(serialize_type<T>(), serialize_type<T>().length()<8))}
@@ -1218,7 +1220,7 @@ private:
         auto t = type(), v = value();
         const char *p = v.as_view().data(), *end = p + v.as_view().size();
         std::string_view ty = t.as_view();
-        if (auto err = serialize_scan_by_type_from(ty, p, end, true)) 
+        if (auto err = serialize_scan_by_type_from(ty, p, end, true))
             err->prepend_type0(t.as_view(), ty).append_msg(" (wany)").throw_me();
         return true;
     }
@@ -1229,7 +1231,7 @@ private:
     /// Return (a view into) the typestring
     /// May copy.
     string_variant type() const { return flatten<has_refc, Allocator>(tbegin, tend); }
-    
+
     /// Return (a view into) the serialized value
     /// May copy.
     string_variant value() const { return flatten<has_refc, Allocator>(vbegin, vend); }
@@ -1251,22 +1253,22 @@ private:
             //We also need to ensure that after this call the t<num> header is in a single chunk at the beginning
             uint32_t size = 0;
             std::string_view t = tbegin->as_view();
-            for (uint32_t i = 1; i < t.length(); i++) 
+            for (uint32_t i = 1; i < t.length(); i++)
                 if ('0' <= t[i] && t[i] <= '9')
                     size = size * 10 + t[i] - '0';
                 else {
                     //OK, full header is in one chunk, split it off
                     split<has_refc, Allocator>(tbegin, i);
-                    return size; 
+                    return size;
                 }
-            //We have parsed all of the first chunk. 
+            //We have parsed all of the first chunk.
             assert(tbegin->next != tend); //or it is just a truncated type
             assert(tbegin->next->size()); //no empty chunks in type
             assert(!isdigit(tbegin->next->data()[0])); //number continues in another chunk!
             return size;
         }
     }
-    
+
     /// Typized getter
     template<typename T>
     auto get_as(uf::serpolicy convpolicy=uf::allow_converting_all) const {
@@ -1278,12 +1280,12 @@ private:
                 return std::holds_alternative<uf::any>(av) ? std::move(std::get<uf::any>(av)) : uf::any{ av.as_view() };
             } else
                 return uf::any_view(from_type_value, type().as_view(), value().as_view()).template get_as<std::remove_cvref_t<T>>(convpolicy);
-        } 
+        }
     }
 
     string_variant as_string() const
     {
-        if (typechar() != 's') 
+        if (typechar() != 's')
             throw uf::type_mismatch_error("Cannot get from wview holding <%1> into a string.", type().as_view(), "s");
         string_variant ret = value();
         assert(ret.size() >= 4);
@@ -1301,7 +1303,7 @@ private:
         if (std::holds_alternative<std::string_view>(t)) {
             if (std::holds_alternative<std::string_view>(v))
                 return uf::any_view(uf::from_type_value, std::get<std::string_view>(t), std::get<std::string_view>(v));
-            else 
+            else
                 return uf::any(uf::from_type_value, std::string(std::get<std::string_view>(t)), std::move(std::get<std::string>(v)));
         } else {
             if (std::holds_alternative<std::string_view>(v))
@@ -1349,7 +1351,7 @@ private:
         if (size() - 1 == children.back().first)
             children.back().second->change_vend(vend); //tail recursion, IMO
     }
-    
+
     /** Check whether children are allowed to change type.
      * Never called when the type does not change.
      * @param [in] char change_to The typechar of the new type.
@@ -1412,7 +1414,7 @@ private:
                 vc = insert_empty_chunk_after<has_refc, Allocator>(vlc);
             assert(check(LOC));
             auto &w = children.emplace(loc, std::piecewise_construct, std::forward_as_tuple(idx),
-                                       std::forward_as_tuple(std::move(tc), std::move(vlc), 
+                                       std::forward_as_tuple(std::move(tc), std::move(vlc),
                                                              std::move(vc), vend, this))->second;
             assert(check(LOC));
             assert(children.front().second->check(LOC));
@@ -1508,7 +1510,7 @@ private:
                     throw uf::typestring_error("Invalid map typestring <%1>.", type_.as_view(), 1);
             }
             chunk_ptr tc_inner = split<has_refc, Allocator>(tbegin, 1);
-            
+
             //Find the idx:th element
             static constexpr auto count_len = sizeof(uint32_t);
             // Value chunks hold either unparsed element(s), or a single whole element.
@@ -1521,13 +1523,13 @@ private:
             const char* end = vc->data() + vc->size();
             auto more_val = [&vc, this](const char* &p, const char* &end) {
                 do {
-                    if (vc->next == vend) return; 
+                    if (vc->next == vend) return;
                     vc = vc->next;
                     p = vc->data();
                     end = p + vc->size();
                 } while (p == end);
             };
-            for (; next_elem < idx; ++next_elem) 
+            for (; next_elem < idx; ++next_elem)
                 for (size_t i = 0; i<(t=='m' ? 2 : 1); i++) { //two passes for 'm', one for 'l'
                     std::string_view etype = elem_type[i];
                     if (auto err = serialize_scan_by_type_from(etype, p, end, [](std::string_view &) {}, more_val, false))
@@ -1556,7 +1558,7 @@ private:
         }
         case 't':
             //The call to size() above ensured that the whole t<num> header is in a separate chunk at the front alone.
-            if (vbegin->size() && idx==0) { 
+            if (vbegin->size() && idx==0) {
                 //ensure value chain starts with an empty chunk
                 //(so that we can disown our children and change vbegin's content at the same time)
                 auto second = vbegin->clone();
@@ -1590,7 +1592,7 @@ private:
             for (; next_elem < idx; ++next_elem)
                 if (auto err = serialize_scan_by_type_from(etypes, p, end, more_type, more_val, false))
                     err->append_msg(" (wany)").throw_me(); //TODO: prepend type (needs parsing the typestring up to 'loc' and following type consumption in more_type)
-            //now 'p' and 'etypes' points to the vstart/tstart of the idx:th element 
+            //now 'p' and 'etypes' points to the vstart/tstart of the idx:th element
             auto tc_start = tc = split<has_refc, Allocator>(tc, etypes.data() - tc->data());
             auto vc_start = vc = split<has_refc, Allocator>(vc, p - vc->data());
             etypes = tc->as_view();
@@ -1737,7 +1739,7 @@ private:
             if (type_changed)
                 //Here we cannot yet change tbegin as it may be a part of the
                 //vbegin->vend chunk list. It may happen if we assign a parent of us
-                //to us. In that case our type is part of the parent's value, which 
+                //to us. In that case our type is part of the parent's value, which
                 //we clone below.
                 clone_into<has_refc, Allocator>(new_tbegin, w.tbegin, w.tend, tend);
             [[fallthrough]];
@@ -1820,7 +1822,7 @@ private:
         }
         char const ptype = parent->typechar();
         const uint32_t old_tlen = !type_changed
-            ? type.length() 
+            ? type.length()
             : ptype == 'a'
                 ? uf::deserialize_as<uint32_t>(std::string_view(parent->vbegin->data(), 4)) //faster than flatten_type_size
                 : flatten_type_size();
@@ -1888,7 +1890,7 @@ private:
         else update_parent_any_sizes(diff);
         assert(check(LOC));
     }
-    
+
     /** Returns the index in children of what or nothing if not our child.*/
     std::optional<uint32_t> cindexof(const ptr &what) const noexcept {
         auto i = std::find_if(children.begin(), children.end(),
@@ -1907,7 +1909,7 @@ private:
 
     /** Deletes an element at this index in 'children'.
      * When deleting from a tuple, we change type. If this is not allowed by
-     * the parent, we throw a type mismatch. If the deletion makes a two-element 
+     * the parent, we throw a type mismatch. If the deletion makes a two-element
      * tuple to a single elemented non-tuple, we return true.
      * We also return true when the user wants to delete from an 'abcdeiIxX' (not possible)
      * and false on success.*/
@@ -1921,7 +1923,7 @@ private:
         case 'o': //set the has_value byte to zero
             if (!vbegin->is_writable()) {
                 split<has_refc, Allocator>(vbegin, 1); //ensure has_value byte is its own chunk
-                vbegin->reserve(1); //make sure writable 
+                vbegin->reserve(1); //make sure writable
             }
             vbegin->data_writable()[0] = 0;
             break;
@@ -1996,7 +1998,7 @@ private:
             if (auto t1 = type(), t2 = what.type(); t1.as_view().substr(1) != t2.as_view())
                 throw uf::type_mismatch_error("Cannot insert a <%2> into <%1>.", t1.as_view(), t2.as_view(), 1);
             goto insert_map_list;
-        case 'm': 
+        case 'm':
             if (auto t1 = type(), t2 = what.type(); t2.as_view().substr(0,2)!="t2" || t1.as_view().substr(1) != t2.as_view().substr(2))
                 throw uf::type_mismatch_error("Cannot insert a <%2> into <%1>.", t1.as_view(), t2.as_view(), 1);
         insert_map_list: {
@@ -2027,8 +2029,8 @@ private:
             size_diff += what.flatten_type_size();         //We insert this into the typestring
             tbegin->assign(std::string_view(new_len));
             //link in a clone of the type of 'what'
-            const chunk_ptr& link_after = cindex < 0 ? 
-                tbegin : 
+            const chunk_ptr& link_after = cindex < 0 ?
+                tbegin :
                 find_before<has_refc, Allocator>(children[cindex].second->tend,
                                                  children[cindex].second->tbegin,
                                                  children[cindex].second->tend);
@@ -2045,7 +2047,7 @@ private:
                 clone_into<has_refc, Allocator>(vbegin, what.vbegin, what.vend, old_vbegin);
                 goto adjust_children_indices;
             }
-        } 
+        }
         {
             //link in a clone of the data of 'what'
             const chunk_ptr& link_after = cindex < 0 ?
@@ -2073,8 +2075,8 @@ private:
 
     std::pair<ptr, std::string> linear_search(const ptr &t, int n) {
         const char c = typechar();
-        if (c != 'l' && c != 'm') 
-            return { {}, uf::concat("linear_search() is possible only in lists/maps and not in <", 
+        if (c != 'l' && c != 'm')
+            return { {}, uf::concat("linear_search() is possible only in lists/maps and not in <",
                                     type().as_view(), ">.") };
         const bool is_map = c == 'm';
         auto t1_ = type(), t2_ = t->type();
@@ -2133,7 +2135,7 @@ private:
                     if (type.empty()) return { {}, uf::concat("Internal value error #2c in linear_search(): ", t1)};
                     if (auto err = serialize_scan_by_type_from(type, pVC, end, [](std::string_view&) {}, more_val, false))
                         return { {}, uf::concat("Internal value error #2b in linear_search(): ", err->prepend_type0(t1_.as_view(), type).what()) };
-                } 
+                }
                 if (type.size()) return { {}, uf::concat("Internal value error #2d in linear_search(): ", t1, "->", type)};
                 vc = split<has_refc, Allocator>(vc, pVC - vc->data());
                 //now the selected data is in the chunk range [vc_start, vc)
@@ -2178,11 +2180,11 @@ private:
     //Any optimization with wview& set(wview&& p) ?
     /// Calculate flattened value string byte size
     uint32_t flatten_size() const noexcept { return impl::flatten_size<has_refc, Allocator>(vbegin, vend); }
-    
+
     /// Copy flattened value bytes to buf
     /// @param buf should have size returned by flatten_size
     void flatten_to(char *buf) const { impl::flatten_to<has_refc, Allocator>(vbegin, vend, buf); }
-    
+
     operator std::string() const {
         std::string ret = "wv{type: [";
         append_to<has_refc, Allocator>(ret, tbegin, tend);
@@ -2292,18 +2294,18 @@ inline void tallocator_reset() noexcept { impl::MonotonicAllocatorBase<impl::Mon
 /* On the thread safety of wview.
  * - wviews are not thread safe as a general rule.
  * - However, 2 different wviews NOT sharing data (one is not part of the other) never shares chunks, just sviews.
- * - For this reason sviews are thread safe in that 
- *   - Their refcount is atomic. 
+ * - For this reason sviews are thread safe in that
+ *   - Their refcount is atomic.
  *   - They cannot be copied, moved, but only freshly initialized from memory.
- *   - As soon as their refocunt ever increases above 1, they become read-only, 
- *     even if their refcount falls back to 1. This means that if you create 2 sview::ptrs 
+ *   - As soon as their refocunt ever increases above 1, they become read-only,
+ *     even if their refcount falls back to 1. This means that if you create 2 sview::ptrs
  *     to the same swiev, that sview becomes read-only and hence thread safe.
  *
  * To use vwiews in a thread-safe manner do the following.
  * - Use a wview only on one thread at a time.
  * - Sub-views shall not be used concurrently with the parent wview.
- * - You can, however, use wview::set() setting the content of a wview to 
- *   the value of some other wview, like A.set(B) - and later use A and B 
+ * - You can, however, use wview::set() setting the content of a wview to
+ *   the value of some other wview, like A.set(B) - and later use A and B
  *   concurrently.
  */
 
@@ -2348,7 +2350,7 @@ Functions of the wview
 
 Examples:
 - Append to a list of strings
-uf.view().insert_before(nil, "appended"); 
+uf.view().insert_before(nil, "appended");
 
 - Insert k,v (both wviews) into sorted map, sort is via less()
 upper_bound = ww.upper_bound(k, less);
