@@ -22,8 +22,8 @@
 #endif
 
 #ifdef __GNUC__
-#define ATTR_PURE__ __attribute__((pure)) 
-#define ATTR_NOINLINE__ __attribute__((noinline)) 
+#define ATTR_PURE__ __attribute__((pure))
+#define ATTR_NOINLINE__ __attribute__((noinline))
 #else
 #define ATTR_PURE__
 #define ATTR_NOINLINE__
@@ -35,7 +35,7 @@
 #define be64toh ntohll
 #undef min
 #undef max
-#endif 
+#endif
 
 /** @defgroup serialization Serialization library
 * @brief Serialization without a schema language for C++ and Python
@@ -62,7 +62,7 @@
 * - a: `uf::any` - a special type that can hold any serializable type. Internally its typestring and its
 *      serialized value is stored.
 * - e: `uf::error_value` - the error type used in expected values, see below.
-* 
+*
 * Any 16-bit integer is converted to and from a 32-bit one. For any integer
 * signed and unsigned are silently converted to each other. In case of conversion
 * 32-bit to 64 (and back), we assume signed.
@@ -80,7 +80,7 @@
 *
 * - xT: `uf::expected<T>`. This either holds a `T` or a `uf::error_value` in the spirit of the C++23(?)
 *                        `std::expected<T,E>`. `T` must be default constructible.
-* - X: `uf::expected<void>` 
+* - X: `uf::expected<void>`
 * - oT: `std::optional<T>`: Either a T or nothing. Smart and raw pointers and `std::optional` serializes to this in C++.
 *                    On deserialization such values can either deserialize back to a smart pointer
 *                    or convert to a variable of T in C++. If a missing value is attempted to deserialize
@@ -125,7 +125,7 @@
 * - Zero-length `std::array`s (or C arrays) or `std::array`s (or C arrays) of void-like types.
 * - Lists of void-like types.
 * - Maps with both a void-like key type and mapped type.
-* 
+*
 * If these appear as members of a tuple, they are simply omitted both from the type and the
 * serialized value (which is natural as they are of zero length in both). If this makes the tuple
 * have just one non-void member, it is encoded as simply that member. If a tuple has only void
@@ -184,22 +184,22 @@
 * Naturally the value_type must be deserializable itself - and it also has to be default
 * constructible, because there is no mechanism as of yet to construct an object from serialized data.
 * If these are found, we call `clear()` at the beginning of deserialization; issue a reserve() if exists
-* and then for each element we default construct a `T::value_type`, deserialize it and then move 
+* and then for each element we default construct a `T::value_type`, deserialize it and then move
 * `insert()` or move `push_back()` it to the container.
 *
 * Serialization of structs
 * ========================
 *
-* There is limited support to serialize structs as tuples. 
-* 
+* There is limited support to serialize structs as tuples.
+*
 * Auto serialization
 * ------------------
-* 
-* Simple Aggregate structures are automatically serializable to/from without any user code. 
+*
+* Simple Aggregate structures are automatically serializable to/from without any user code.
 * Specifically, the following conditions must be met for this to work:
 * - The struct must be an aggregate, that is
 *   - No constructors/destructors
-*   - No virtual functions   
+*   - No virtual functions
 *   - Only public non-static members
 *   - No virtual or non-public base classes
 * - Only empty base classes (or empty struct with only one non-empty base class)
@@ -208,43 +208,43 @@
 * - No reference or C-array members
 * - Each member must be copy constructible (or move constructible and move assignable)
 * - Empty structs are not auto serialized, by design.
-* - Structs that look like containers (see "Serialization of containers" above) are 
+* - Structs that look like containers (see "Serialization of containers" above) are
 *   serialized as containers not as auto serialized structures.
 * - Structs that have (any) tuple_for_serialization(void) member/free functions use
-*   those (see below how) and are not auto serialized. This is to turn auto serialization 
+*   those (see below how) and are not auto serialized. This is to turn auto serialization
 *   off when doing manual serialization.
-* 
+*
 * In short, you can have simple, public collection of values. You can also have:
 * - default initializers
 * - static data members
 * - member functions
-* 
+*
 * Of course, the members of the structs must also be serializable/deserializable.
-* 
+*
 * If you dont want a structure to be auto serializable (e.g., because you want it to be
 * serializable/deserializable only with tags), you can disable it in two ways
 * - Add 'using auto_serialization = void;' to the struct; and/or
-* - Specialize 'allow_auto_serialization' for your type to false: 
+* - Specialize 'allow_auto_serialization' for your type to false:
 *   'template <> constexpr bool allow_auto_serialization<MyType> = false;'
-* 
-* With auto serialize you cannot 
+*
+* With auto serialize you cannot
 * - omit certain members, all will be serialized/deserialized;
 * - take actions before and after serialization (like maintaining class invariants or
 *   locking);
 * - specify tags (see below). (But member types having tags will work.)
-* 
+*
 * If you want these, read on to manual serialization below.
-* 
-* Here are a few notes that are not making sense right now, so please read on to the 
+*
+* Here are a few notes that are not making sense right now, so please read on to the
 * next subsections for more details.
 * - If you specify only one of the const or non-const tuple_for_serialization()
-*   function for a struct then auto serialization will be turned off both for serialization 
+*   function for a struct then auto serialization will be turned off both for serialization
 *   and deserialization.
 * - If you specify tuple_for_serialization(tag) with a tag argument,
 *   auto serialization will still be turned on, making this struct serializable/deserializable
 *   without tags. Disable auto serialization if you dont want this.
 * - If you specify a before/after_serialization() or after_serialization_xxx() member
-*   or free function for a struct that is using auto serialization, the above functions 
+*   or free function for a struct that is using auto serialization, the above functions
 *   will NOT be used.
 *
 * Manual serialization
@@ -259,7 +259,7 @@
 * If you add a non-const `tuple_for_serialization()` function (or a free variant) then
 * deserialization will also work.
 * NOTE: The return type of the const and non-const `tuple_for_serialization()` functions
-* must not be *exactly* the same. This normally happens automatically if you return 
+* must not be *exactly* the same. This normally happens automatically if you return
 * references to members as one will contain const refs, another non-const refs.
 * It is good practice to make these noexcept, but not mandatory.
 * \code
@@ -289,8 +289,8 @@
 * will not work as its typestring would be infinitely long. Also avoid re-using
 * the type in a member container, such as `std::vector<ilist>` in 'mystruct' above.
 *
-* Any free function for `tuple_for_serialization()` will be accepted if it is callable 
-* with a const reference of your type (or non-const lvalue reference for deserialization). 
+* Any free function for `tuple_for_serialization()` will be accepted if it is callable
+* with a const reference of your type (or non-const lvalue reference for deserialization).
 * So instead of the member functions above you can also write
 * \code
 * auto tuple_for_serialization(const mystruct &m) noexcept {return std::tie(m.a,m.m.b,m.c,m.s,m.o,m.vd);}
@@ -300,8 +300,8 @@
 * to its members. (If you have access to members only through getters/setters read on.)
 * Note, that when we search for a `tuple_for_serialization()` we always check matching
 * free functions first. So in the above situation adding a `mystruct::tuple_for_serialization()`
-* member function will have no effect as the free function takes precedence. We dont warn on 
-* this condition, so be aware. 
+* member function will have no effect as the free function takes precedence. We dont warn on
+* this condition, so be aware.
 * (Same rules apply to before/after_serialization/deserialization below.)
 *
 * The free function feature may have unintended side effects.
@@ -327,7 +327,7 @@
 * and non-const version to be the same, so your type is serializable from
 * and into the same way. Use the `uf::is_ser_deser_ok_v<T>` type trait
 * to check (for any type) if it is both serializable and deserializable
-* (as owning) and the two typestrings are the same.  
+* (as owning) and the two typestrings are the same.
 * `static_assert(uf:is_ser_deser_ok_v<mystruct>);`
 * You can also use `uf::is_ser_deser_view_ok_v<T>` to test view types.
 *
@@ -335,13 +335,13 @@
 * a tuple of references, as `std::tie()` would do. This is useful for serializing
 * types with non-directly-serializable members, see below.
 *
-* Note again, however, that the return type of const and non-const tuple_for_serialization() 
-* functions must be different for deserialization to work. Otherwise it is not possible to 
-* selectively detect if the const or non-const version exists (and have ADL, that is). 
-* This normally works automatically if you return tuples to refs to members (they will have 
+* Note again, however, that the return type of const and non-const tuple_for_serialization()
+* functions must be different for deserialization to work. Otherwise it is not possible to
+* selectively detect if the const or non-const version exists (and have ADL, that is).
+* This normally works automatically if you return tuples to refs to members (they will have
 * const or non-const refs).
 * Usually a problem when returning by value from both (and using after_deserialization()).
-* If you really want to return the same 'Type' from both, use std::tuple<Type> for the const 
+* If you really want to return the same 'Type' from both, use std::tuple<Type> for the const
 * version to make the two types technically different.
 *
 * Simple helpers for non-supported members
@@ -363,7 +363,7 @@
 *   do a quick conversion of a member that is otherwise not serializable.
 * - To deserialize such string values back into a proper member of non-string type you can
 *   use `uf::string_deserializer<Func>(Func f)` class. `f` must be a lambda taking a string_view
-*   parameter and carrying out the deserialization. So to deserialize the above 
+*   parameter and carrying out the deserialization. So to deserialize the above
 *   `std::filesystem::path file_path` member, just return in the non-const `tuple_for_serialization()`
 *   \code
 *   auto tuple_for_serialization() {
@@ -372,9 +372,9 @@
 *   \endcode
 *   If you want to have a view type, use `uf::string_deserializer_view<Func>` instead. Returning this
 *   as part of the tuple in the non-const tuple_for_serialization(), then the type will be
-*   deserializable only as a view. (It cannot be used in `uf::deserialize()`, `uf::any::get()`, 
-*   `uf::any::get_as()` calls, only in 
-*   `uf::deserialize_view()` and the `get_view()` or `get_view_as()` variants. 
+*   deserializable only as a view. (It cannot be used in `uf::deserialize()`, `uf::any::get()`,
+*   `uf::any::get_as()` calls, only in
+*   `uf::deserialize_view()` and the `get_view()` or `get_view_as()` variants.
 * - For deserialization back to a C array use
 *   `uf::array_inserter<T>(T*p, int max_size, int*size=nullptr, bool throv=true)`.
 *   Specify the location and how many elements can the space accomodate. You can also specify
@@ -404,7 +404,7 @@
 * also supply a `before_serialization(void)` const member (or `before_serialization(const T&)`
 * free function), which will be called before these two steps. Also `after_serialization(bool)`
 * will be called after, allowing you to lock and unlock the mutex, respectively.
-* It will be called with a boolean indicating success of the entire serialization operation 
+* It will be called with a boolean indicating success of the entire serialization operation
 * (of a type this type may only be a part of). This allows to unambigously keep or pass
 * ownership of some resource from the object to its serialized variant.
 * (Note that if you provide any of these functions for members of a struct - ie what
@@ -412,9 +412,9 @@
 * `tuple_for_serialization()` will be called more than twice - to get to call before or
 * `after_serialization()` for the members.)
 *
-* It is guaranteed that for any object we have called `before_serialization()` for, 
-* `after_serialization(bool)` will also be called (also in case of exceptions, even if 
-* `before_serialization()` was the function that has thrown). 
+* It is guaranteed that for any object we have called `before_serialization()` for,
+* `after_serialization(bool)` will also be called (also in case of exceptions, even if
+* `before_serialization()` was the function that has thrown).
 * The only case when we cannot guarantee such pairing is when `tuple_for_serialization()` of a
 * component type does not throw when called as part of the before_serialization pass neither
 * when doing length calculation nor when doing the actual serialization, but only when doing
@@ -442,8 +442,8 @@
 * 4. Else if `after_deserialization_simple()` exists, call it.
 * 5. Else if `after_deserialization(std::move(x))` is callable, call it.
 * 6. If steps \#4 or \#5 throw an exception, let it percolate up.
-* 
-* Note that it is easy to mistype some part (name, type of U, constness, etc.) of 
+*
+* Note that it is easy to mistype some part (name, type of U, constness, etc.) of
 * after_deserialization(U&&) and you get no error, a badly formatted after_deserialization() will
 * simply not be called. So it is good practice to add
 * `static_assert(uf::has_after_deserialization_tag_v<T>);' after you defined these functions.
@@ -452,12 +452,12 @@
 * - uf::has_tuple_for_serialization_tag_v<bool, T>
 * - uf::has_before_serialization_tag_v<T>
 * - uf::has_after_serialization_tag_v<T>
-* - uf::has_after_deserialization_tag_v<T> 
+* - uf::has_after_deserialization_tag_v<T>
 * - uf::has_after_deserialization_simple_tag_v<T>
 * - uf::has_after_deserialization_error_tag_v<T>
-* 
+*
 * (The term 'tag' in the name of these traits is explained below.)
-* Note that these return true even if your struct has 
+* Note that these return true even if your struct has
 * - no tuple_for_serialization() member with this tag nor without any tags, so these
 *   functions can never be invoked;
 * - no tuple_for_serialization() member at all and is using auto serialization,
@@ -469,7 +469,7 @@
 *   that `std::tie`s the members to serialize and an `after_deserialization_simple()`, in which you
 *   can ensure the class invariants after the members listed in `tuple_for_serialization()` were
 *   deserialized into.
-* - If you need to lock the structure for the duration of the deserialization: Add a mutex to 
+* - If you need to lock the structure for the duration of the deserialization: Add a mutex to
 *   the data structure; lock it at the beginning of `tuple_for_serialization()`
 *   (as there is no `before_deserialization()` function looked up); unlock it in both
 *   `after_deserialization_error()` and `after_deserialization_simple()`/`after_deserialization(U&&)`.
@@ -504,21 +504,21 @@
 * It is sometimes desirable to have more control over serialization/deserialization
 * 1) You may want a type to be serializable in multiple different ways or want to perform
 *    different side effects at serialization/deserialization; or
-* 2) You may want to provide some context at serialization/deserialization, e.g., to have 
+* 2) You may want to provide some context at serialization/deserialization, e.g., to have
 *    a code book that needs to be looked up at both serialization/deserialization.
-* 
-* Both these cases can be solved via tags. Whenever you define any of the 7 helper function 
-* (tuple_for_serialization (const/non-const), before/after_serialization and 
+*
+* Both these cases can be solved via tags. Whenever you define any of the 7 helper function
+* (tuple_for_serialization (const/non-const), before/after_serialization and
 * after_deserialization(_simple/_error), you can also provide an argument called
 * a tag. This is true in case of both member or free helper functions. For free functions
 * declare the tag argument after the reference to the object serialized, like
 * 'tuple_for_serialization(const T&, Tagtype tag). For after_deserialization(T&, U&&)
-* you should specify it after U&&. 
+* you should specify it after U&&.
 * This way you can specify several of each helper function with different tag types.
-* This may even lead to different typestrings, if the return value of 
-* 'tuple_for_serialization()' depends on the tags. For example, the below struct 
-* can be both serialized/deserialized as a double or as a string. The use of a 
-* zero-length 'as_string'/'as_double' structs represents zero runtime overhead, 
+* This may even lead to different typestrings, if the return value of
+* 'tuple_for_serialization()' depends on the tags. For example, the below struct
+* can be both serialized/deserialized as a double or as a string. The use of a
+* zero-length 'as_string'/'as_double' structs represents zero runtime overhead,
 * they just select the helper function variant.
 * \code
 * struct S {
@@ -526,7 +526,7 @@
 *     struct as_double {};
 *     double d;
 *     auto tuple_for_serialization(as_double) const noexcept { return uf::tie(d); }
-*     auto tuple_for_serialization(as_double)       noexcept { return uf::tie(d); } 
+*     auto tuple_for_serialization(as_double)       noexcept { return uf::tie(d); }
 *     auto tuple_for_serialization(as_string) const          { return std::to_string(d); }
 *     auto tuple_for_serialization(as_string)       noexcept { return std::string(); }
 *     void after_deserialization(std::string &&s, as_string) noexcept { d = std::atof(s.c_str()); }
@@ -545,7 +545,7 @@
 *\code
 * struct S s{42.42};
 * uf::serialize_type<S>()       //error: no tags and no 'tuple_for_serialization() const' (without a tag)
-* uf::serialize_type<S, int>()  //error: no tags and no 'tuple_for_serialization() const' or 'tuple_for_serialization(int)' const 
+* uf::serialize_type<S, int>()  //error: no tags and no 'tuple_for_serialization() const' or 'tuple_for_serialization(int)' const
 * uf::serialize_type<S, S::as_string>()   //good: yields "s"
 * uf::serialize_type<S, S::as_double>()   //good: yields "d"
 * uf::serialize(s)                                               //error: not serializable without tags
@@ -567,7 +567,7 @@
 * a4.get(s, uf::allow_converting_none, uf::use_tags, S::as_double());  //error: 's' with a tag 'S::as_double' expects a double and we can NOT convert an int
 *\endcode
 *
-* Note that helper functions are selected individually. Assume you provide 2 versions of 
+* Note that helper functions are selected individually. Assume you provide 2 versions of
 * 'tuple_for_serialization()' one with tag 'Tag' and one with no tags and only one version
 * of 'after_deserialization_simple()' with 'Tag' to maintain a class invariant.
 * In this case the type will be deserializable with any set of tags due to the existence of
@@ -576,24 +576,24 @@
 * NOTE: As an exception to the above rule an 'after_deserialization(U&&, tag)' function will only be
 * detected if there is a 'tuple_for_serialization(tag)' with the same tag AND the latter returns 'U'.
 * Thus, specifying a tagless 'U tuple_for_serialization()' and 'after_deserialization(U&&, tag)'
-* will never call the latter even if the tag is specified. Use uf::has_after_deserialization_tag_v<T, tag> 
+* will never call the latter even if the tag is specified. Use uf::has_after_deserialization_tag_v<T, tag>
 * to check. It is true only if 'U tuple_for_serialization(tag)' and 'after_deserialization(U&&, tag)'
 * are defined (either as member or free functions).
-* 
+*
 * In all the examples above tags were zero-length structs. However, tags can actually carry a value.
-* This is useful if you want to provide some context to the serialization/deserialization 
+* This is useful if you want to provide some context to the serialization/deserialization
 * process. But be aware that internally these tags are always passed by value, thus they have
 * to be copy constructable, preferably cheaply. If you want to pass a larger const value around,
 * use a 'const Context*' as the tag type. If you also want to update the context, pass a non-const
 * pointer around. Note that you do not need smart pointers for this, as during the serialization/
-* deserialization process, ownership will not change. 
+* deserialization process, ownership will not change.
 * (The decision of not to pass the tags around by (any kind of) reference was made
 * so that zero-length tags remain overhead-free. As a result you have to use pointers for any larger
 * context.)
 *
 * Note well: Try avoiding tags that are convertible to each other - it will likely trigger unwanted
 * functions (like int and double) and it will be hard to debug.
-* Note, as well: If the tag set provided allows 'after_deserialization()' function (either because 
+* Note, as well: If the tag set provided allows 'after_deserialization()' function (either because
 * there is an 'after_deserialization()' with one of the tags or there is a tagless one, then
 * 'after_deserialization_simple()' functions are not considered at all - even if there is one
 * with a tag that is on the tag list.
@@ -602,13 +602,13 @@
 * =========
 *
 * When you find that serialization of one of your types doesn't work, use the following type traits
-* to see where is the problem. These type traits are always true (thus they shall be used in 
+* to see where is the problem. These type traits are always true (thus they shall be used in
 * static_assert()s), but compiling them will trigger other static assertions explaining what is the
 * cause of the problem.
 * @code
 * uf::is_ser_deser_ok_v<T, tags...>       //Type is both serializable and deserializable and the two typestrings are the same
 * uf::is_ser_deser_view_ok_v<T, tags...>  //Type is both serializable and deserializable as a view and the two typestrings are the same
-* uf::is_ser_ok_v<T, tags...>             //Type is serializable 
+* uf::is_ser_ok_v<T, tags...>             //Type is serializable
 * uf::is_deser_view_ok_v<T, tags...>      //Type is deserializable as a view
 * uf::is_deser_ok_v<T, tags...>           //Type is deserializable as owning
 * @endcode
@@ -632,7 +632,7 @@
 * - Line #4 (the last 'required from' line) shows the location of the check.
 * - Then we see in line #3 that the type is question is 'std::vector<test_bad>' This may be a structure of many components,
 *   walking up the 'required_from' list we get deeper into the type towards the problem.
-* - Then the first line shows the type of the actual problem type: 'T = const test_bad'. 
+* - Then the first line shows the type of the actual problem type: 'T = const test_bad'.
 * - The last line then tells what is the problem: "Structure has no tuple_for_serialization() const member/free function". Because we only
 *   have a non-const member and for serialization we need a const version.
 *
@@ -659,27 +659,27 @@
 * Note optionals always convert to their carried value and vice versa, but not to an expected.
 * The uf::serpolicy enum can be used to govern what conversions are allowed. See its documentation for
 * details.
-* 
-* Note on void-like tuple members. Sometimes a tuple member may become void-like during 
+*
+* Note on void-like tuple members. Sometimes a tuple member may become void-like during
 * conversion. E.g., t2Xi will happily convert to 'i' if the 'X' holds a value (void).
 * (If the policy includes 'allow_converting_expected'.)
 * The pathological case of t2Xli will therefore happily convert to 'li' with 'allow_converting_expected',
 * but also to 'la' with 'allow_converting_expected' and 'allow_converting_any' - by wrapping the
 * integers in the list to an uf::any.
-* On the other hand, if you include 'allow_converting_tuple_list', then t2Xli will be converted to a 
+* On the other hand, if you include 'allow_converting_tuple_list', then t2Xli will be converted to a
 * list member-by-member. This results in a list that has always the same number of elements as many
 * members the tuple had. That is, it will include an uf::any holding a uf::expected<void> and a second
 * uf::any holding a std::vector<int>. (Note that std::tuple<std::monospace,int,int> counts as two
 * members, since std::monospace is known to be void-like already during compilation, so its type is
-* 't2ii' and will convert to a list of two elements.) The above also means that 't2Xli' will not 
-* convert to 'li' if 'allow_converting_tuple_list' is specified ('allow_converting_all' will also 
-* include it), because member-by-member conversion fails as none of the tuple's members can be 
+* 't2ii' and will convert to a list of two elements.) The above also means that 't2Xli' will not
+* convert to 'li' if 'allow_converting_tuple_list' is specified ('allow_converting_all' will also
+* include it), because member-by-member conversion fails as none of the tuple's members can be
 * converted to an integer.
-* 
+*
 * Error handling
 * ==============
-* 
-* Serialization related errors are thrown as exceptions. All of the below are 
+*
+* Serialization related errors are thrown as exceptions. All of the below are
 * descendants of uf::value_error, which can be used to catch all of them.
 * - uf::value_mismatch_error: Thrown when a serialzied value does not match a typestring
 *   (or a C++ type). Thrown in deserialization, serialize_scan, printing.
@@ -690,8 +690,8 @@
 *   (all of them if there was more than one such occurrence).
 * - uf::not_serializable_error: Thrown when serializing invalid expected:s
 *   or when a non-serializable Python object is serialized.
-* 
-* In these errors (the first 3), we display the typestring with an asterisk marking where the 
+*
+* In these errors (the first 3), we display the typestring with an asterisk marking where the
 * error happened. E.g, on conversion, we say: could not convert <t2s*i> -> <t2s*s>, showing that
 * it was the second element of the tuple failed conversion. Note that during conversion void-like
 * values may simply decay, so it is possible to convert a 3-element tuple to a 2-element one.
@@ -701,7 +701,7 @@
 * type error may happen there, this is indicated with a parenthesis showing the type inside
 * the any. In the above example if the first any contained a string, we would get conversion
 * error: t3a(*s)sa -> t2*is, showing that the string inside the any cannot be converted to an int.
-* Note that you do not allow any unpacking, the above would result in error t3*asa->t2*is 
+* Note that you do not allow any unpacking, the above would result in error t3*asa->t2*is
 * (even if the any contains an int), but we would also indicate that uf::allow_converting_any
 * policy would allow conversion (of this particular bit).
 *
@@ -736,29 +736,29 @@
         Allocates memory and encodes `t` (using the given tags)
 * - `void serialize(Alloc alloc, const T&t)`
 * - `void serialize(Alloc alloc, const T&t, uf::use_tags, tags...)`
-*       Lets the user allocate memory and encodes `t`. `alloc` is a char*(size_t) function 
+*       Lets the user allocate memory and encodes `t`. `alloc` is a char*(size_t) function
 *       taking the length and returning a char pointer where the serialized data has to be placed.
 * - `string_view deserialize_as<T>(string_view s, bool allow_longer=false)`
 * - `string_view deserialize_as<T>(string_view s, bool allow_longer, uf::use_tags, tags...)`
 * - `string_view deserialize_view_as<T>(string_view s, bool allow_longer=false)`
 * - `string_view deserialize_view_as<T>(string_view s, bool allow_longer, uf::use_tags, tags...)`
-*       Deserializes s into type `T` using the tags assuming s is a serialized form of 
-*       deserilize_type<T, tags...>. Else a value_mismatch_error is thrown. 
-*       If `allow_longer` is true, we accept if data remains after the deserialization. 
+*       Deserializes s into type `T` using the tags assuming s is a serialized form of
+*       deserilize_type<T, tags...>. Else a value_mismatch_error is thrown.
+*       If `allow_longer` is true, we accept if data remains after the deserialization.
 *       This can be used to deserialize only the beginning of a tuple.
 *       No conversions applied, the types are expected to match completely.
 *       The `view` variants allow `T` to be a view type and contain any_view or string_view members
 *       that dont own the data. Deserializing as a view is cheaper, as no memory needs allocation
 *       but the original data must outlive the deserialized variable.
-* - `T deserialize_convert_as<T>(string_view s, string_view from_type, 
+* - `T deserialize_convert_as<T>(string_view s, string_view from_type,
 *                                          serpolicy policy=all, bool allow_longer=false)`
-* - `T deserialize_convert_as<T>(string_view s, string_view from_type, 
+* - `T deserialize_convert_as<T>(string_view s, string_view from_type,
 *                                          serpolicy policy=all, bool allow_longer, uf::use_tags, tags...)`
-* - `T deserialize_view_convert_as<T>(string_view s, string_view from_type, 
+* - `T deserialize_view_convert_as<T>(string_view s, string_view from_type,
 *                                               serpolicy policy=all, bool allow_longer=false)`
-* - `T deserialize_view_convert_as<T>(string_view s, string_view from_type, 
+* - `T deserialize_view_convert_as<T>(string_view s, string_view from_type,
 *                                               serpolicy policy=all, bool allow_longer, uf::use_tags, tags...)`
-*       Deserialize either as owning or as a view from `s` as serialized value (assuming it 
+*       Deserialize either as owning or as a view from `s` as serialized value (assuming it
 *       is of type `from_type`) using `policy`. If the deserialize type of `T` (with `tags`) is
 *       not exactly the same as `from_type`, we apply conversion. This is slower a bit.
 * - `string_view deserialize(string_view s, T&v, bool allow_longer=false)`
@@ -773,8 +773,8 @@
 *                                               serpolicy policy=all, bool allow_longer=false)`
 * - `string_view deserialize_view_convert(string_view s, string_view from_type, T&v,
 *                                               serpolicy policy=all, bool allow_longer, uf::use_tags, tags...)`
-*       These varians serialize into an existing lvalue as opposed to returning the 
-*       deserialized value. This also means that you do not have to specify the type 
+*       These varians serialize into an existing lvalue as opposed to returning the
+*       deserialized value. This also means that you do not have to specify the type
 *       excplicitly as a template parameter. We return the serialized data remaining after
 *       deserialization. If allow_longer==false, this is empty. Else it is the back of `s`.
 * - `std::optional<type_mismatch_error>
@@ -789,7 +789,7 @@
 *   Best used like `if (auto err = cant_convert()) {handle_error(*err)};`
 *   Note that a bad typestring always throws a `uf::typestring_error` and mismatching `from_type` and
 *   `from_value` always throws a `uf::value_mismatch_error`.
-* - `std::pair<std::string, bool> 
+* - `std::pair<std::string, bool>
         convert(string_view from_type, string_view to_type, serpolicy policy, string_view from_value);`
 *    If converts a serialized value of type `from_type` to `to_type`. Throws if not possible with the policy specified,
 *    expecteds to be converted to their contained type contain errors, one of the typestrings is invalid or the value
@@ -811,10 +811,10 @@
 * - `has_before_serialization_tag_v<T, tags...>`           //True if T has before_serialization()
 * - `has_after_serialization_tag_v<T, tags...>`            //True if T has after_serialization(bool, tags...)
 * - `has_after_deserialization_tag_v<T, tags...>`          //True if T has after_deserialization(U&&) (where U= return type of tuple_for_serialization())
-* - `has_after_deserialization_simple_tag_v<T, tags...>`   //True if T has after_deserialization() 
+* - `has_after_deserialization_simple_tag_v<T, tags...>`   //True if T has after_deserialization()
 * - `has_after_deserialization_error_tag_v<T, tags...>`    //True if T has after_deserialization_error()
 *          Verify that user supplied member or free functions actually exist. The `tag` is part of the name
-*          to remind you that these apply only to a particular set of tags. If tags... is empty then the 
+*          to remind you that these apply only to a particular set of tags. If tags... is empty then the
 *          non tagged version.
 * - `is_ser_deser_ok_v<T, tags...>`       //Type is both serializable and deserializable and the two typestrings are the same
 * - `is_ser_deser_view_ok_v<T, tags...>`  //Type is both serializable and deserializable as a view and the two typestrings are the same
@@ -846,7 +846,7 @@ struct error : public std::logic_error { using logic_error::logic_error; };
  * - value_mismatch_error uses one or none.
  * - typestring_error uses one.
  * - type_mismatch_error and expected_with_error uses two.
- * - not_serializable_error uses none. 
+ * - not_serializable_error uses none.
  * It has a mechanism to store more than one position in each type. This is used to mark
  * problematic expecteds in expected_with_error.*/
 struct value_error : public error {
@@ -861,7 +861,7 @@ struct value_error : public error {
                     ret.insert(ret.begin() + pos[i], '*');
             return ret;
         }
-        /** True if we have no type, no position or only a single position at 
+        /** True if we have no type, no position or only a single position at
          * the front or way larger then the type length. */
         [[nodiscard]] bool front_only() const noexcept { return type.empty() || pos.size() == 0 || (pos.size() == 1 && (pos.front() == 0 || pos.front()>type.size())); }
         void prepend(char c) {
@@ -906,19 +906,19 @@ struct value_error : public error {
         }
     }
 
-    /** Encaps and extend the type in type[0] assuming encapsualtion in an 'any'. 
+    /** Encaps and extend the type in type[0] assuming encapsualtion in an 'any'.
      * Useful for operations (scanning, printing), which report only the remaining type in their errors
      * at the lowest level recursive functions. This is perhaps
-     * best explained via an example. Assume we are working on a 't2ai' type (scanning its value, 
+     * best explained via an example. Assume we are working on a 't2ai' type (scanning its value,
      * converting or printing it)  where the 'a' contains a map: 'mad' and there is one element in the
      * map, where the 'any' contains an invalid typestring: "@". Once that is detected and a value_error
-     * (a typestring_error to be specific) is formed at the bottom layer this function will be called 
+     * (a typestring_error to be specific) is formed at the bottom layer this function will be called
      * from the place processing the map as follows
      * => type[0] = "@" (pos=0), original_inner_type="@", remaining_inner_type="", remaining_outer_type="d"
-     * and it will update type[0] to be "(@)d" (pos=1). 
+     * and it will update type[0] to be "(@)d" (pos=1).
      * Then, in the place, where we process the outer tuple, it will be called again
      * => type[0] = "(@)d" (pos=3), original_inner_type="mad", remaining_inner_type="d", remaining_outer_type="i"
-     * and it will update type[0] to be "(ma(@)d)i" (pos=4). 
+     * and it will update type[0] to be "(ma(@)d)i" (pos=4).
      * Then the top level function will prepend the processed part of the outer type: t2a, resulting in the
      * type in the error message: t2a(ma(*@)d)i. */
     value_error &encaps(std::string_view original_inner_type, std::string_view remaining_inner_type,
@@ -932,7 +932,7 @@ struct value_error : public error {
         return *this;
     }
 
-    /** Prepend the prefix of the 'original_type' not part of 'remaining_type'. 
+    /** Prepend the prefix of the 'original_type' not part of 'remaining_type'.
      * Assumes 'original_type' ends in 'remaining_type'. */
     value_error &prepend_type0(std::string_view original_type, std::string_view remaining_type) {
         const size_t consumed = original_type.length() - remaining_type.length();
@@ -963,7 +963,7 @@ protected:
 struct type_mismatch_error : public value_error {
     [[nodiscard]] type_mismatch_error(std::string_view _format,
                                       std::string_view t1, std::string_view t2,
-                                      size_t pos_t1 = std::string::npos, size_t pos_t2 = std::string::npos) 
+                                      size_t pos_t1 = std::string::npos, size_t pos_t2 = std::string::npos)
         : value_error(_format, t1, t2, pos_t1, pos_t2) {}
     [[nodiscard]] type_mismatch_error(const type_mismatch_error&) = default;
     [[nodiscard]] type_mismatch_error(type_mismatch_error&&) noexcept = default;
@@ -974,7 +974,7 @@ struct type_mismatch_error : public value_error {
 
 /** When a typestring is invalid.*/
 struct typestring_error : public value_error {
-    [[nodiscard]] explicit typestring_error(std::string_view _msg, std::string_view type, size_t pos_type = std::string::npos) 
+    [[nodiscard]] explicit typestring_error(std::string_view _msg, std::string_view type, size_t pos_type = std::string::npos)
         : value_error(_msg, type, {}, pos_type) {}
     [[nodiscard]] typestring_error(const typestring_error&) = default;
     [[nodiscard]] typestring_error(typestring_error&&) noexcept = default;
@@ -1009,7 +1009,7 @@ struct expected_with_error : public value_error {
     std::vector<error_value> errors;
     [[nodiscard]] explicit
         expected_with_error(std::string_view _msg, std::string_view _t1, std::string_view _t2,
-                            std::vector<error_value> &&_e, std::vector<std::pair<size_t, size_t>> &&_p) 
+                            std::vector<error_value> &&_e, std::vector<std::pair<size_t, size_t>> &&_p)
             : value_error(_msg, _t1, _t2), errors(std::move(_e)) {
         for (auto &p : _p) {
             types[0].pos.push_back((uint16_t)std::min(size_t(std::numeric_limits<uint16_t>::max()), p.first));
@@ -1072,7 +1072,7 @@ public:
                 std::stringstream s;
                 s << (void*)c;
                 return operator<<(s.str());
-            } 
+            }
         else
             static_assert(std::is_void_v<T>, "I cannot print this type."); //std::is_void_v<T> here is just to make the condition dependent on T
         return *this;
@@ -1122,8 +1122,8 @@ public:
         std::string ret = std::move(result); result.clear();
         return ret;
     }
-    /** A potentially cheap flattening. 
-     * If there is only one part, it is just a view to that. 
+    /** A potentially cheap flattening.
+     * If there is only one part, it is just a view to that.
      * On multiple parts, we flatten and return a view to the internal string.
      * The view returned will be invalidated by any operation. */
     operator std::string_view() const
@@ -1322,7 +1322,7 @@ inline std::string print_floating_point(std::floating_point auto d, bool full_pr
         std::is_same_v<decltype(d), long double> ? (full_precision ? "%.21Lg" : "%.8Lg") :
         (full_precision ? "%.17g" : "%.8g");
     snprintf(s, sizeof(s), fmt, d);
-    std::string ret = s;    
+    std::string ret = s;
     if (ret.find('e') != std::string::npos) return ret; //scientific notation, we are done
     if (ret.find('.') != std::string::npos) //has a dot, remove trailing zeros
         while (ret.size() > 1 && ret.back() == '0')
@@ -1584,7 +1584,7 @@ static_assert(std::is_same_v<deserializable_value_type<std::map<int, double>>::t
 static_assert(std::is_same_v<deserializable_value_type<std::vector<int>>::type, int>);
 
 template <typename T>
-constexpr bool is_really_auto_serializable_v = 
+constexpr bool is_really_auto_serializable_v =
       std::is_class<std::remove_cvref_t<T>>::value
   &&  std::is_aggregate<std::remove_cvref_t<T>>::value
   && !std::is_empty<std::remove_cvref_t<T>>::value
@@ -1592,7 +1592,7 @@ constexpr bool is_really_auto_serializable_v =
   && !is_deserializable_container<T>::value
   &&  allow_auto_serialization<T>                                           //user provided input outside T
   && !requires { requires std::is_void_v<typename T::auto_serialization>; } //user provided input inside T
-  && !requires (const T &t) { tuple_for_serialization(t); }                 //any tuple_for_serialization(void) free... 
+  && !requires (const T &t) { tuple_for_serialization(t); }                 //any tuple_for_serialization(void) free...
   && !requires (const T &t) { t.tuple_for_serialization(); };               //...or member fn prevents auto serialization
 
 template <>
@@ -1621,9 +1621,9 @@ template<typename T> struct has_tuple_for_serialization_member_deser<T, void, st
     using plainT = std::remove_cvref_t<T>;
     //const T if 'T::tuple_for_serialization() const' exists, else T.
     //This is to prevent trying to find a T::tuple_for_serialization() const below if it does not exist
-    using constT = std::conditional_t<has_const, std::add_const_t<plainT>, plainT>; 
-    static constexpr bool value = !has_const || 
-        !std::is_same_v<decltype(decllval<plainT>().tuple_for_serialization()), 
+    using constT = std::conditional_t<has_const, std::add_const_t<plainT>, plainT>;
+    static constexpr bool value = !has_const ||
+        !std::is_same_v<decltype(decllval<plainT>().tuple_for_serialization()),
                         decltype(decllval<constT>().tuple_for_serialization())>;
 };
 template<typename T, typename tag> struct has_tuple_for_serialization_member_deser<T, tag, std::void_t<decltype(decllval<std::remove_cvref_t<T>>().tuple_for_serialization(std::declval<tag>()))>> {
@@ -1631,7 +1631,7 @@ template<typename T, typename tag> struct has_tuple_for_serialization_member_des
     using plainT = std::remove_cvref_t<T>;
     //const T if 'T::tuple_for_serialization() const' exists, else T.
     //This is to prevent trying to find a T::tuple_for_serialization() const below if it does not exist
-    using constT = std::conditional_t<has_const, std::add_const_t<plainT>, plainT>; 
+    using constT = std::conditional_t<has_const, std::add_const_t<plainT>, plainT>;
     static constexpr bool value = !has_const ||
         !std::is_same_v<decltype(decllval<plainT>().tuple_for_serialization(std::declval<tag>())),
                         decltype(decllval<constT>().tuple_for_serialization(std::declval<tag>()))>;
@@ -1679,13 +1679,13 @@ template<typename T, typename tag> struct has_tuple_for_serialization_deser<T, t
 
 struct no_applicable_tag {};
 
-/** Given a type and a trait function (has_tuple_for_serialization_ser, 
+/** Given a type and a trait function (has_tuple_for_serialization_ser,
  * has_tuple_for_serialization_deser, has_before_serialization,
- * has_after_serialization, etc...) and a set of tags packed in a tuple, 
+ * has_after_serialization, etc...) and a set of tags packed in a tuple,
  * we return the first tag the type T has the trait function with.
- * We define both a type member and an index member that holds the 
+ * We define both a type member and an index member that holds the
  * (zero based) index of the selected tag in the param pack.
- * If the type has no tagged trait function with any of the tags, 
+ * If the type has no tagged trait function with any of the tags,
  * we return void (and -1) if the type has an untagged such function
  * and no_applicable_tag (and -2) if it has not.*/
 template <typename T, template<typename, typename, typename> typename trait, typename tag_tuple> struct select_tag_tuple {
@@ -1702,7 +1702,7 @@ struct select_tag_tuple<T, trait, std::tuple<head_tag, trail_tags...>> {
     using type = typename std::conditional_t<trait<T, head_tag, void>::value, head_tag,
         typename select_tag_tuple<T, trait, std::tuple<trail_tags...>>::type>;
     static constexpr int index = trait<T, head_tag, void>::value ? 0 :
-        select_tag_tuple<T, trait, std::tuple<trail_tags...>>::index + 
+        select_tag_tuple<T, trait, std::tuple<trail_tags...>>::index +
         (select_tag_tuple<T, trait, std::tuple<trail_tags...>>::index>=0 ? 1 : 0); //dont increment -1 and -2
 };
 
@@ -1715,7 +1715,7 @@ struct select_tag_tuple<T, trait, std::tuple<head_tag, trail_tags...>> {
  * If the type has no tagged trait function with any of the tags,
  * we return void (and -1) if the type has an untagged such function
  * and no_applicable_tag (and -2) if it has not.*/
-template <typename T, template<typename, typename, typename> typename trait, typename ...tags> 
+template <typename T, template<typename, typename, typename> typename trait, typename ...tags>
 using select_tag = select_tag_tuple<T, trait, std::tuple<tags...>>;
 
 /** True if type 'T' has a trait function (use trait types, like e.g., has_before_serialization)
@@ -1764,7 +1764,7 @@ constexpr bool has_noexcept_tuple_for_serialization_ser_f() {
 template <typename T, typename ...tags>
 decltype(auto) invoke_tuple_for_serialization(T &t, tags... tt) //decltype(auto) perfect forwards the return value
     noexcept(has_noexcept_tuple_for_serialization_deser_f<T, tags...>())
-{ 
+{
     ignore_pack(tt...);
     constexpr int index = select_tag<T, has_tuple_for_serialization_deser, tags...>::index;
     if constexpr (index==-1)
@@ -1774,7 +1774,7 @@ decltype(auto) invoke_tuple_for_serialization(T &t, tags... tt) //decltype(auto)
         return tuple_for_serialization(t, std::get<index>(std::make_tuple(tt...)));
 }
 template <typename T, typename ...tags>
-decltype(auto) invoke_tuple_for_serialization(const T &t, tags... tt) 
+decltype(auto) invoke_tuple_for_serialization(const T &t, tags... tt)
     noexcept(has_noexcept_tuple_for_serialization_ser_f<T, tags...>())
 {
     ignore_pack(tt...);
@@ -1786,7 +1786,7 @@ decltype(auto) invoke_tuple_for_serialization(const T &t, tags... tt)
 }
 
 template <typename T, typename ...tags>
-decltype(auto) invoke_tuple_for_serialization_tup(T &t, std::tuple<tags...> tt) 
+decltype(auto) invoke_tuple_for_serialization_tup(T &t, std::tuple<tags...> tt)
     noexcept(has_noexcept_tuple_for_serialization_deser_f<T, tags...>())
 {
     (void)tt;
@@ -1798,7 +1798,7 @@ decltype(auto) invoke_tuple_for_serialization_tup(T &t, std::tuple<tags...> tt)
         return tuple_for_serialization(t, std::get<index>(tt));
 }
 template <typename T, typename ...tags>
-decltype(auto) invoke_tuple_for_serialization_tup(const T &t, std::tuple<tags...> tt) 
+decltype(auto) invoke_tuple_for_serialization_tup(const T &t, std::tuple<tags...> tt)
     noexcept(has_noexcept_tuple_for_serialization_ser_f<T, tags...>())
 {
     (void)tt;
@@ -1856,7 +1856,7 @@ void invoke_before_serialization(const T &t, tags... tt) noexcept (has_noexcept_
 
 //after_serialization
 /** Helper template to check if a struct has after_serialization(bool) member
- * Note, it will be true even if it is a non-const member. We will likely fail to invoke it for 
+ * Note, it will be true even if it is a non-const member. We will likely fail to invoke it for
  * a const T during serialization - but at least we gave an error to the user.*/
 template<typename T, typename tag = void, typename = void> struct has_after_serialization_member : std::false_type {};
 template<typename T> struct has_after_serialization_member<T, void, std::void_t<decltype(std::declval<const T>().after_serialization(true))>> : std::true_type {};
@@ -1905,7 +1905,7 @@ template<typename T, typename tag> struct has_after_deserialization_error_member
 
 /** Free function calling the member.*/
 template <typename T, typename = std::enable_if_t<has_after_deserialization_error_member<T, void>::value>>
-void after_deserialization_error(T& t) noexcept(noexcept(std::declval<T>().after_deserialization_error())) { t.after_deserialization_error(); 
+void after_deserialization_error(T& t) noexcept(noexcept(std::declval<T>().after_deserialization_error())) { t.after_deserialization_error();
     static_assert(noexcept(t.after_serialization(true)), "after_deserialization_error() functions must be noexcept.");
 }
 /** Free function calling the member.*/
@@ -1989,26 +1989,26 @@ template<typename T, typename tag> struct has_after_deserialization_member<T, ta
 
 /** Free function calling the member.*/
 template <typename T, typename = std::enable_if_t<has_after_deserialization_member<T, void>::value>>
-void after_deserialization(T& t, std::remove_cvref_t<decltype(tuple_for_serialization(decllval<std::remove_cvref_t<T>>()))> &&tmp) 
+void after_deserialization(T& t, std::remove_cvref_t<decltype(tuple_for_serialization(decllval<std::remove_cvref_t<T>>()))> &&tmp)
    noexcept(noexcept(std::declval<T>().after_deserialization(std::declval<decltype(tmp)>())))
 { t.after_deserialization(std::move(tmp)); }
 /** Free function calling the member.*/
 template <typename T, typename tag, typename = std::enable_if_t<has_after_deserialization_member<T, tag>::value>>
-void after_deserialization(T &t, std::remove_cvref_t<decltype(tuple_for_serialization(decllval<std::remove_cvref_t<T>>()))> &&tmp, tag tt) 
+void after_deserialization(T &t, std::remove_cvref_t<decltype(tuple_for_serialization(decllval<std::remove_cvref_t<T>>()))> &&tmp, tag tt)
     noexcept(noexcept(std::declval<T>().after_deserialization(std::declval<decltype(tmp)>(), std::declval<tag>())))
 { t.after_deserialization(std::move(tmp), tt); }
 
 /** Helper template to check if a struct has after_deserialization(U&) free function, where U is the return type of tuple_for_serialization*/
 template<typename T, typename tag = void, typename = void> struct has_after_deserialization_tag : std::false_type {};
-template<typename T> struct has_after_deserialization_tag<T, void, 
+template<typename T> struct has_after_deserialization_tag<T, void,
     std::void_t<decltype(after_deserialization(decllval<std::remove_cvref_t<T>>(),
                                                tuple_for_serialization(decllval<std::remove_cvref_t<T>>())))>> : std::true_type {};
 //Note here that here we need an after_deserialization(U&&, tag), where U is the return value of tuple_serialization(tag).
-//Thus we cannot have a tag-less tuple_for_serialization and an after_deserialization(tag) with a tag - the latter will not be 
+//Thus we cannot have a tag-less tuple_for_serialization and an after_deserialization(tag) with a tag - the latter will not be
 //called.
 //TODO: fix this and allow what is the natural behaviour.
 template<typename T, typename tag> struct has_after_deserialization_tag<T, tag,
-    std::void_t<decltype(after_deserialization(decllval<std::remove_cvref_t<T>>(), 
+    std::void_t<decltype(after_deserialization(decllval<std::remove_cvref_t<T>>(),
                                                tuple_for_serialization(decllval<std::remove_cvref_t<T>>(), std::declval<tag>()),
                                                std::declval<tag>()))>> : std::true_type {};
 
@@ -2027,8 +2027,8 @@ constexpr bool has_noexcept_after_deserialization_f() {
 }
 
 template <typename T, typename ...tags>
-void invoke_after_deserialization(T &t, decltype(invoke_tuple_for_serialization(decllval<T>(), std::declval<tags>()...)) &&r, 
-                                  tags... tt) 
+void invoke_after_deserialization(T &t, decltype(invoke_tuple_for_serialization(decllval<T>(), std::declval<tags>()...)) &&r,
+                                  tags... tt)
     noexcept(noexcept(has_noexcept_after_deserialization_f<T, tags...>()))
 {
     ignore_pack(tt...);
@@ -2133,7 +2133,7 @@ inline constexpr bool is_all_X_f() noexcept
     } else if constexpr (!des && std::is_pointer<plainT>::value)
         return is_all_X_f<des, decltype(*std::declval<T>()), tags...>();
     else if constexpr (is_smart_ptr<plainT>::value)
-        return is_all_X_f<des, plainT::element_type, tags...>();
+        return is_all_X_f<des, typename plainT::element_type, tags...>();
     else { //optional cannot be void-like, so we dont check for it
         if constexpr (des) {
             using tag = typename select_tag<T, has_tuple_for_serialization_deser, tags...>::type; //The tag that applies to tuple_for_serialization(), void or no_applicable_tag.
@@ -2266,7 +2266,7 @@ inline constexpr bool is_deserializable_f() noexcept
     using plainT = std::remove_volatile_t<std::remove_reference_t<T>>; //A const or non-const plain type
     //Allow const tuples and pairs, as these may hold non-const references
     if constexpr (is_pair<plainT>::value)
-        return is_deserializable_f<typename plainT::first_type, as_view, emit_error, tags...>() && 
+        return is_deserializable_f<typename plainT::first_type, as_view, emit_error, tags...>() &&
                is_deserializable_f<typename plainT::second_type, as_view, emit_error, tags...>();
     else if constexpr (is_tuple<plainT>::value) {
         if constexpr (std::tuple_size<plainT>::value == 0)
@@ -2307,12 +2307,12 @@ inline constexpr bool is_deserializable_f() noexcept
             return is_deserializable_f<typename std::remove_cvref_t<typename plainT::value_type::first_type>, as_view, emit_error, tags...>() &&
                    is_deserializable_f<typename plainT::value_type::second_type, as_view, emit_error, tags...>();
         } else if constexpr (is_deserializable_f<typename deserializable_value_type<plainT>::type, as_view, emit_error, tags...>()) { //allow for const value types (set)
-            if constexpr (is_deserializable_container_element_f<typename plainT::value_type>()) 
+            if constexpr (is_deserializable_container_element_f<typename plainT::value_type>())
                 return true;
             else
                 static_assert(!emit_error, "Container elements must be default and copy/move constructible.");
             return false;
-        } else  
+        } else
             return false; //non deserializable value type
     } else if constexpr (is_smart_ptr<plainT>::value) {
         if constexpr (!is_void_like<true, typename std::remove_cvref_t<T>::element_type, tags...>::value)
@@ -2388,10 +2388,10 @@ enum class nt {
  *           - len: we only require tuple_for_serialization() to be noexcept
  *           - ser: in addition, we require before_serialization() to be noexcept
  *             (after_serialization() is mandatory to be noexcept)
- *           - deser: we require after_deserialization() (or in its absence 
- *             after_deserialization_simple()) to be noexcept (or missing). 
- *             Plus we require that the type does not allocate at deserialization 
- *             (even for non-structs). This latter thing effectively excludes string, 
+ *           - deser: we require after_deserialization() (or in its absence
+ *             after_deserialization_simple()) to be noexcept (or missing).
+ *             Plus we require that the type does not allocate at deserialization
+ *             (even for non-structs). This latter thing effectively excludes string,
  *             containers and smart pointers.
  * Note that this function may return true for non-(de)serializable types, so this is not a
  * check for serializability or such.*/
@@ -2430,11 +2430,11 @@ inline constexpr bool is_noexcept_for(nt n) noexcept {
         bool ret = true;
         if (n==nt::deser) {
             using tag = typename select_tag<plainT, has_tuple_for_serialization_deser, tags...>::type; //The tag that applies to tuple_for_serialization() NON-CONST, void or no_applicable_tag.
-            if constexpr (std::is_void_v<tag>) 
+            if constexpr (std::is_void_v<tag>)
                 ret &= noexcept(tuple_for_serialization(decllval<plainT>())) && is_noexcept_for<decltype(tuple_for_serialization(decllval<plainT>())), tags...>(n);
             else if constexpr (!std::is_same_v<tag, no_applicable_tag>)
                 ret &= noexcept(tuple_for_serialization(decllval<plainT>(), std::declval<tag>())) && is_noexcept_for<decltype(tuple_for_serialization(decllval<plainT>(), std::declval<tag>())), tags...>(n);
-            else if constexpr (is_void_like<true, plainT, tags...>::value) 
+            else if constexpr (is_void_like<true, plainT, tags...>::value)
                 return true;  //test void here, since a struct may have a tuple_for_serialization() returning a void-like type, but throwing
 #ifdef HAVE_BOOST_PFR
             else if constexpr (is_really_auto_serializable_v<plainT>)
@@ -2460,7 +2460,7 @@ inline constexpr bool is_noexcept_for(nt n) noexcept {
                 ret &= noexcept(tuple_for_serialization(decllval<const plainT>())) && is_noexcept_for<decltype(tuple_for_serialization(decllval<const plainT>())), tags...>(n);
             else if constexpr (!std::is_same_v<tag, no_applicable_tag>)
                 ret &= noexcept(tuple_for_serialization(decllval<const plainT>(), std::declval<tag>())) && is_noexcept_for<decltype(tuple_for_serialization(decllval<const plainT>(), std::declval<tag>())), tags...>(n);
-            else if constexpr (is_void_like<false, plainT, tags...>::value) 
+            else if constexpr (is_void_like<false, plainT, tags...>::value)
                 return true;  //test void here, since a struct may have a tuple_for_serialization() returning a void-like type, but throwing
 #ifdef HAVE_BOOST_PFR
             else if constexpr (is_really_auto_serializable_v<plainT>)
@@ -2588,7 +2588,7 @@ std::unique_ptr<value_error> cant_convert(std::string_view from_type, std::strin
 std::unique_ptr<value_error> cant_convert(std::string_view from_type, std::string_view to_type, serpolicy policy,
                                           std::string_view serialized_data);
 std::optional<std::string>
-convert(std::string_view from_type, std::string_view to_type, serpolicy convpolicy, 
+convert(std::string_view from_type, std::string_view to_type, serpolicy convpolicy,
         std::string_view serialized_data, bool check = false);
 
 inline std::string to_string(uf::serpolicy convpolicy)
@@ -2742,7 +2742,7 @@ constexpr auto serialize_type_static_impl(const S *, const tag_tuple*, std::enab
     }
 }
 #ifdef HAVE_BOOST_PFR
-template <bool des, typename S, typename tag_tuple = std::tuple<>> 
+template <bool des, typename S, typename tag_tuple = std::tuple<>>
 constexpr auto serialize_type_static_impl(const S *, const tag_tuple *, std::enable_if_t<is_really_auto_serializable_v<S> && !has_tuple_for_serialization_tup_v<des, S, tag_tuple>> *) noexcept {
     if constexpr (des) {
         typename std::add_pointer<decltype(boost::pfr::structure_tie(decllval<      std::remove_cvref_t<S>>()))>::type t = nullptr;
@@ -2802,7 +2802,7 @@ template <bool des, typename T, typename ...tags>
 constexpr auto serialize_type_static() { return serialize_type_static_impl<des>((typename std::remove_cvref_t<T> *)nullptr, (std::tuple<tags...> *)nullptr); }
 
 /** Helper function to check if a type has the same typestring for serialization and deserialization.
- * If emit error is true, we fire a static_assert explaining the problem. 
+ * If emit error is true, we fire a static_assert explaining the problem.
  * For non-serializable and/or non-deserializable types we also emit an error.
  * We always return true.*/
 template <typename T, bool as_view, bool emit_error, typename ...tags>
@@ -2842,7 +2842,7 @@ constexpr std::string_view ATTR_PURE__ ser_error_str(ser problem) noexcept {
 }
 
 /** Parses string and checks if it is a valid type description.
- * @param [in] type The typestring to check. 
+ * @param [in] type The typestring to check.
  * @param [in] accept_void If true, we return a valid 0 on an empty 'type'
  * @returns On success the offset of the next char after the type and zero, whereas on
  *          error we return the offset of the error and the kind of the error.*/
@@ -2886,12 +2886,12 @@ inline std::pair<size_t, ser> ATTR_PURE__ parse_type(std::string_view type, bool
     return parse_type(type.data(), type.data()+type.length(), accept_void);
 }
 
-template <typename T, typename tag_tuple> 
+template <typename T, typename tag_tuple>
 constexpr typename std::enable_if<!is_serializable_container<T>::value && !has_tuple_for_serialization_tup_v<false, T, tag_tuple> && !is_really_auto_serializable_v<T>, bool>::type
 has_before_serialization_inside_f(const T*, tag_tuple*) noexcept { return false; } //default generic: non container, non struct
 template <typename T, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const expected<T>*, tag_tuple *) noexcept;
 template <typename C, typename tag_tuple>
-constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type 
+constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type
 has_before_serialization_inside_f(const C*, tag_tuple *) noexcept;
 template <typename S, typename tag_tuple> constexpr typename std::enable_if<has_tuple_for_serialization_tup<false, S, tag_tuple>::value, bool>::type
 has_before_serialization_inside_f(const S*, tag_tuple *) noexcept;
@@ -2909,8 +2909,8 @@ template <typename T, typename tag_tuple> constexpr bool has_before_serializatio
 
 template <typename T, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const expected<T>*, tag_tuple *tags) noexcept
 { std::remove_cvref_t<T> *x = nullptr; return has_before_serialization_inside_f(x, tags); }
-template <typename C, typename tag_tuple> 
-constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type 
+template <typename C, typename tag_tuple>
+constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type
 has_before_serialization_inside_f(const C*, tag_tuple *tags) noexcept
 {typename serializable_value_type<C>::type *x = nullptr; return has_before_serialization_inside_f(x, tags); }
 template <typename S, typename tag_tuple> constexpr typename std::enable_if<has_tuple_for_serialization_tup<false, S, tag_tuple>::value, bool>::type
@@ -2940,24 +2940,24 @@ template <typename T, typename tag_tuple> constexpr bool has_before_serializatio
 template <typename T, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::optional<T> *, tag_tuple *tags)
 { std::remove_cvref_t<T> *x = nullptr; return has_before_serialization_inside_f(x, tags); }
 
-template <typename T, typename ...tags> 
+template <typename T, typename ...tags>
 constexpr bool has_before_serialization_inside_v = has_before_serialization_inside_f(std::add_pointer_t<std::add_const_t<std::remove_cvref_t<T>>>(),
                                                                                      (std::tuple<tags...> *)nullptr);
 
-template <typename T, typename tag_tuple> 
+template <typename T, typename tag_tuple>
 constexpr typename std::enable_if<!is_serializable_container<T>::value && !has_tuple_for_serialization_tup_v<false, T, tag_tuple> && !is_really_auto_serializable_v<T>, bool>::type
 has_after_serialization_inside_f(const T*, tag_tuple*) noexcept { return false; } //default generic: non container, non struct
 template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const expected<T>*, tag_tuple *) noexcept;
-template <typename C, typename tag_tuple> 
-constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type 
+template <typename C, typename tag_tuple>
+constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type
 has_after_serialization_inside_f(const C*, tag_tuple *) noexcept;
-template <typename S, typename tag_tuple> constexpr typename std::enable_if<has_tuple_for_serialization_tup_v<false, S, tag_tuple>, bool>::type 
+template <typename S, typename tag_tuple> constexpr typename std::enable_if<has_tuple_for_serialization_tup_v<false, S, tag_tuple>, bool>::type
 has_after_serialization_inside_f(const S*, tag_tuple *) noexcept;
 template <typename S, typename tag_tuple> constexpr typename std::enable_if<is_really_auto_serializable_v<S> && !has_tuple_for_serialization_tup_v<false, S, tag_tuple>, bool>::type
 has_after_serialization_inside_f(const S *, tag_tuple *) noexcept;
 template <typename A, typename B, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::pair<A, B> *, tag_tuple *) noexcept;
-template <typename T, typename ...TT, typename tag_tuple> 
+template <typename T, typename ...TT, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *) noexcept;
 template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::tuple<T> *, tag_tuple *) noexcept;
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::array<T, L> *, tag_tuple *);
@@ -2969,8 +2969,8 @@ template <typename T, typename tag_tuple> constexpr bool has_after_serialization
 
 template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const expected<T>*, tag_tuple *tags) noexcept
 { std::remove_cvref_t<T> *x = nullptr; return has_after_serialization_inside_f(x, tags); }
-template <typename C, typename tag_tuple> 
-constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type 
+template <typename C, typename tag_tuple>
+constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization_tup_v<false, C, tag_tuple>, bool>::type
 has_after_serialization_inside_f(const C*, tag_tuple *tags) noexcept
 {typename serializable_value_type<C>::type *x = nullptr; return has_after_serialization_inside_f(x, tags); }
 template <typename S, typename tag_tuple> constexpr typename std::enable_if<has_tuple_for_serialization_tup_v<false, S, tag_tuple>, bool>::type
@@ -2981,10 +2981,10 @@ template <typename S, typename tag_tuple> constexpr typename std::enable_if<is_r
 has_after_serialization_inside_f(const S *s, tag_tuple *tags) noexcept
 { std::remove_cvref_t<decltype(boost::pfr::structure_tie(*s))> *x = nullptr; return has_after_serialization_inside_f(x, tags); }
 #endif
-template <typename A, typename B, typename tag_tuple> 
+template <typename A, typename B, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::pair<A, B> *, tag_tuple *tags) noexcept
 { std::remove_cvref_t<A>* x = nullptr; std::remove_cvref_t <B>*y = nullptr; return has_after_serialization_inside_f(x, tags) || has_after_serialization_inside_f(y, tags); }
-template <typename T, typename ...TT, typename tag_tuple> 
+template <typename T, typename ...TT, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *tags) noexcept
 { std::remove_cvref_t<T> *x = nullptr; std::tuple<TT...> *y=nullptr; return has_after_serialization_inside_f(x, tags) || has_after_serialization_inside_f(y, tags); }
 template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::tuple<T> *, tag_tuple *tags) noexcept
@@ -3002,7 +3002,7 @@ template <typename T, typename tag_tuple> constexpr bool has_after_serialization
 template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::optional<T> *, tag_tuple *tags)
 { std::remove_cvref_t<T> *x = nullptr; return has_after_serialization_inside_f(x, tags); }
 
-template <typename T, typename ...tags> 
+template <typename T, typename ...tags>
 constexpr bool has_after_serialization_inside_v = has_after_serialization_inside_f(std::add_pointer_t<std::add_const_t<std::remove_cvref_t<T>>>(),
                                                                                    (std::tuple<tags...> *)nullptr);
 
@@ -3013,16 +3013,16 @@ struct err_place {
     err_place(std::exception_ptr &&e, const void *o) : ex(std::move(e)), obj(o) {}
 };
 
-template <typename T, typename ...tags> 
+template <typename T, typename ...tags>
 inline typename std::enable_if<!is_serializable_container<T>::value && !has_tuple_for_serialization<false, T, tags...>::value && !is_really_auto_serializable_v<T>, err_place>::type
 call_before_serialization(const T*, tags...) noexcept { return {}; } //default generic: non container, non struct
 template <typename T, typename ...tags> inline err_place call_before_serialization(const uf::expected<T> *, tags...) noexcept;
-template <typename C, typename ...tags> 
-inline typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, err_place>::type 
+template <typename C, typename ...tags>
+inline typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, err_place>::type
 call_before_serialization(const C*, tags...) noexcept;
-template <typename S, typename ...tags> 
+template <typename S, typename ...tags>
 inline typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value, err_place>::type call_before_serialization(const S*, tags...) noexcept;
-template <typename S, typename ...tags> 
+template <typename S, typename ...tags>
 inline typename std::enable_if<is_really_auto_serializable_v<S> && !has_tuple_for_serialization<false, S, tags...>::value, err_place>::type call_before_serialization(const S*, tags...) noexcept;
 template <typename A, typename B, typename ...tags> inline err_place call_before_serialization(const std::pair<A, B> *, tags...) noexcept;
 template <typename T, typename ...TT, typename ...tags> inline err_place call_before_serialization(const std::tuple<T, TT...> *, tags...) noexcept;
@@ -3034,25 +3034,25 @@ template <typename T, typename ...tags> inline err_place call_before_serializati
 template <typename T, typename ...tags> inline err_place call_before_serialization(const T * const *, tags...) noexcept;
 template <typename T, typename ...tags> inline err_place call_before_serialization(const std::optional<T> *, tags...) noexcept;
 
-template <typename C, typename ...tags> 
-inline typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, err_place>::type 
+template <typename C, typename ...tags>
+inline typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, err_place>::type
 call_before_serialization(const C*c, tags... tt) noexcept
 { (void)c; ignore_pack(tt...);
-    if constexpr (has_before_serialization_inside_v<C, tags...>) for (auto &e : *c) 
-        try { if (auto r = call_before_serialization(&e, tt...); r.obj) return r; } 
+    if constexpr (has_before_serialization_inside_v<C, tags...>) for (auto &e : *c)
+        try { if (auto r = call_before_serialization(&e, tt...); r.obj) return r; }
         catch (...) { return {std::current_exception(), &e}; } return {};
 }
-template <typename S, typename ...tags> 
-inline typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value, err_place>::type 
+template <typename S, typename ...tags>
+inline typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value, err_place>::type
 call_before_serialization(const S *s, tags... tt) noexcept
 { try {
     if constexpr (has_before_serialization_v<S, tags...>) invoke_before_serialization(*s, tt...);
-    if constexpr (has_before_serialization_inside_v<decltype(invoke_tuple_for_serialization(*s, tt...)), tags...>) 
+    if constexpr (has_before_serialization_inside_v<decltype(invoke_tuple_for_serialization(*s, tt...)), tags...>)
         { auto &&x = invoke_tuple_for_serialization(*s, tt...);  return call_before_serialization(&x, tt...); }
   } catch (...) { return { std::current_exception(), s }; } return {};
 }
 #ifdef HAVE_BOOST_PFR
-template <typename S, typename ...tags> 
+template <typename S, typename ...tags>
 inline typename std::enable_if<is_really_auto_serializable_v<S> && !has_tuple_for_serialization<false, S, tags...>::value, err_place>::type
 call_before_serialization(const S *s, tags... tt) noexcept
 { try {
@@ -3072,32 +3072,32 @@ template <typename T, typename ...TT, typename ...tags> inline err_place call_be
 template <typename T, typename ...tags> inline err_place call_before_serialization(const std::tuple<T> *t, tags... tt) noexcept
 { (void)t; ignore_pack(tt...);  if constexpr (has_before_serialization_inside_v<T, tags...>) if (auto r = call_before_serialization(&std::get<0>(*t), tt...); r.obj) return r; return {}; }
 template <typename T, size_t L, typename ...tags> inline err_place call_before_serialization(const std::array<T, L> *c, tags... tt) noexcept
-{ (void)c; ignore_pack(tt...);  if constexpr (has_before_serialization_inside_v<std::array<T,L>, tags...>) for (auto &e : *c) 
-      try { if (auto r = call_before_serialization(&e, tt...); r.obj) return r; } 
+{ (void)c; ignore_pack(tt...);  if constexpr (has_before_serialization_inside_v<std::array<T,L>, tags...>) for (auto &e : *c)
+      try { if (auto r = call_before_serialization(&e, tt...); r.obj) return r; }
       catch (...) { return {std::current_exception(), &e}; } return {}; }
 template <typename T, size_t L, typename ...tags> inline err_place call_before_serialization(T const (*t)[L], tags... tt) noexcept
-{ (void)t; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) for (size_t u = 0; u<L; u++) 
-    if (auto r = call_before_serialization(t+u, tt...); r.obj) return r; 
+{ (void)t; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) for (size_t u = 0; u<L; u++)
+    if (auto r = call_before_serialization(t+u, tt...); r.obj) return r;
    return {}; }
 template <typename T, typename ...tags> inline err_place call_before_serialization(const std::unique_ptr<T> *p, tags... tt) noexcept
-{ (void)p; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) if (*p) 
-    if (auto r = call_before_serialization(p->get(), tt...); r.obj) return r; 
+{ (void)p; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) if (*p)
+    if (auto r = call_before_serialization(p->get(), tt...); r.obj) return r;
   return {}; }
 template <typename T, typename ...tags> inline err_place call_before_serialization(const std::shared_ptr<T> *p, tags... tt) noexcept
-{ (void)p; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) if (*p) 
-    if (auto r = call_before_serialization(p->get(), tt...); r.obj) return r; 
+{ (void)p; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) if (*p)
+    if (auto r = call_before_serialization(p->get(), tt...); r.obj) return r;
    return {}; }
 template <typename T, typename ...tags> inline err_place call_before_serialization(const T * const *p, tags... tt) noexcept //works for char*, too (will return false)
-{ (void)p; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) if (*p) 
-    if (auto r = call_before_serialization(*p, tt...); r.obj) return r; 
+{ (void)p; ignore_pack(tt...); if constexpr (has_before_serialization_inside_v<T, tags...>) if (*p)
+    if (auto r = call_before_serialization(*p, tt...); r.obj) return r;
    return {}; }
 template <typename T, typename ...tags> inline err_place call_before_serialization(const std::optional<T> *o, tags... tt) noexcept
-{ (void)o; if constexpr(has_before_serialization_inside_v<T, tags...>) if (*o) 
-    if (auto r = call_before_serialization(&o->value(), tt...); r.obj) return r; 
+{ (void)o; if constexpr(has_before_serialization_inside_v<T, tags...>) if (*o)
+    if (auto r = call_before_serialization(&o->value(), tt...); r.obj) return r;
   return {}; }
 
 
-template <typename T, typename ...tags> 
+template <typename T, typename ...tags>
 inline typename std::enable_if<!is_serializable_container<T>::value && !has_tuple_for_serialization<false, T, tags...>::value && !is_really_auto_serializable_v<T>, void>::type
 call_after_serialization(const T*, bool, tags...) noexcept {} //default generic: non container, non struct
 template <typename T, typename ...tags> inline void call_after_serialization(const uf::expected<T> *, bool, tags...) noexcept(is_noexcept_for<T, tags...>(nt::len));
@@ -3114,13 +3114,13 @@ template <typename T, typename ...tags> inline void call_after_serialization(con
 template <typename T, typename ...tags> inline void call_after_serialization(const T * const *, bool, tags...) noexcept(is_noexcept_for<T, tags...>(nt::len));
 template <typename T, typename ...tags> inline void call_after_serialization(const std::optional<T> *, bool, tags...) noexcept(is_noexcept_for<T, tags...>(nt::len));
 
-template <typename C, typename ...tags> 
-inline typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, void>::type 
+template <typename C, typename ...tags>
+inline typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, void>::type
 call_after_serialization(const C*c, bool success, tags... tt) noexcept(is_noexcept_for<C, tags...>(nt::len))
 { (void)c; ignore_pack(tt...);  if constexpr (has_after_serialization_inside_v<C, tags...>) for (auto &e : *c) call_after_serialization(&e, success, tt...); }
-template <typename S, typename ...tags> inline typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value, void>::type 
+template <typename S, typename ...tags> inline typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value, void>::type
 call_after_serialization(const S *s, bool success, tags... tt) noexcept(is_noexcept_for<S, tags...>(nt::len))
-{ if constexpr (has_after_serialization_inside_v<decltype(invoke_tuple_for_serialization(*s, tt...)), tags...>) 
+{ if constexpr (has_after_serialization_inside_v<decltype(invoke_tuple_for_serialization(*s, tt...)), tags...>)
       { auto &&x = invoke_tuple_for_serialization(*s, tt...);  return call_after_serialization(&x, success, tt...); }
   if constexpr (has_after_serialization_v<S, tags...>) invoke_after_serialization(*s, success, tt...); }
 #ifdef HAVE_BOOST_PFR
@@ -3154,7 +3154,7 @@ template <typename T, typename ...tags> inline void call_after_serialization(con
  * Walk the data type and go into all branch even if there is no after_serialization there, so that we
  * can stop at the object that has thrown. If that object is found, call after_serialization for it
  * (if exists) and re-throw the exception.*/
-template <typename T, typename ...tags> 
+template <typename T, typename ...tags>
 inline typename std::enable_if<!is_serializable_container<T>::value && !has_tuple_for_serialization_v<false, T, tags...> && !is_really_auto_serializable_v<T>, void>::type
 call_after_serialization(const T*, err_place, tags...) noexcept {} //default generic: non container, non struct
 template <typename T, typename ...tags> inline void call_after_serialization(const uf::expected<T> *, err_place, tags...) noexcept(is_noexcept_for<T, tags...>(nt::ser));
@@ -3220,7 +3220,7 @@ template <typename ...tags> constexpr size_t serialize_len(const double&, tags..
 template <typename ...tags> constexpr size_t serialize_len(const long double&, tags...) noexcept { return 8; }
 template <typename ...tags> inline size_t serialize_len(const std::string &s, tags...) noexcept { return 4+s.length(); }
 template <typename ...tags> inline size_t serialize_len(const std::string_view &s, tags...) noexcept { return 4+s.length(); }
-//If I enable the below overload, I get ambigous resolution for serialize_len(const char [X]). 
+//If I enable the below overload, I get ambigous resolution for serialize_len(const char [X]).
 //As a workaround I let the serialize_len(const char *) be selected.
 //Note this is why the serialize_len(const T[X]) overload excludes T=char.
 //template <size_t LEN, typename ...tags>
@@ -3230,7 +3230,7 @@ template <typename T, typename ...tags> constexpr size_t serialize_len(const exp
 template <typename E, typename ...tags>
 constexpr typename std::enable_if<std::is_enum<E>::value, size_t>::type serialize_len(const E &, tags...) noexcept;
 template <typename C, typename ...tags>
-constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, size_t>::type 
+constexpr typename std::enable_if<is_serializable_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, size_t>::type
 serialize_len(const C &, tags...) noexcept(is_noexcept_for<C, tags...>(nt::len));
 template <typename S, typename ...tags>
 constexpr typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value, size_t>::type serialize_len(const S &, tags...)  noexcept(is_noexcept_for<S, tags...>(nt::len));
@@ -3272,12 +3272,12 @@ template <typename T, typename ...TT, typename ...tags> //tuples
 constexpr size_t serialize_len(const std::tuple<T, TT...> &t, tags... tt) noexcept(is_noexcept_for<std::tuple<T, TT...>, tags...>(nt::len))
 { return serialize_len(std::get<0>(t), tt...)+serialize_len(tuple_tail(t), tt...); }
 template <typename T, size_t L, typename ...tags>
-constexpr size_t serialize_len(const std::array<T, L> &o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len)) 
+constexpr size_t serialize_len(const std::array<T, L> &o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len))
 { size_t ret = 0; for (auto &t : o) ret += serialize_len(t, tt...); return ret; }
 template <typename T, size_t L, typename ...tags, typename>
-constexpr size_t serialize_len(T const (&o)[L], tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len)) 
+constexpr size_t serialize_len(T const (&o)[L], tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len))
 { size_t ret = 0; for (auto &t : o) ret += serialize_len(t, tt...); return ret; }
-template <typename T, typename ...tags> constexpr size_t serialize_len(const std::unique_ptr<T> &p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len)) 
+template <typename T, typename ...tags> constexpr size_t serialize_len(const std::unique_ptr<T> &p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len))
 { if (p) return 1 + serialize_len(*p, tt...); else return 1; }
 template <typename T, typename ...tags> constexpr size_t serialize_len(const std::shared_ptr<T> &p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len))
 { if (p) return 1 + serialize_len(*p, tt...); else return 1; }
@@ -3306,9 +3306,9 @@ template <typename ...tags> inline void serialize_to(const std::string_view &s, 
 template <typename ...tags> inline void serialize_to(const char * const &s, char *&p, tags...) noexcept { const uint32_t len = strlen(s); serialize_to(len, p); memcpy(p, s, len); p += len; }
 template <typename T, typename ...tags> void serialize_to(const expected<T>&, char *&p, tags...tt) noexcept(is_noexcept_for<T, tags...>(nt::ser));
 template <typename E, typename ...tags> typename std::enable_if<std::is_enum<E>::value>::type serialize_to(const E &e, char *&p, tags...) noexcept;
-template <typename C, typename ...tags> typename std::enable_if<is_serializable_container<C>::value && !is_std_array<C>::value && !has_tuple_for_serialization<false, C, tags...>::value>::type 
+template <typename C, typename ...tags> typename std::enable_if<is_serializable_container<C>::value && !is_std_array<C>::value && !has_tuple_for_serialization<false, C, tags...>::value>::type
 serialize_to(const C &c, char *&p, tags...) noexcept(is_noexcept_for<C, tags...>(nt::ser));
-template <typename S, typename ...tags> typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value && is_serializable_v<S, tags...>>::type 
+template <typename S, typename ...tags> typename std::enable_if<has_tuple_for_serialization<false, S, tags...>::value && is_serializable_v<S, tags...>>::type
 serialize_to(const S &c, char *&p, tags...) noexcept(is_noexcept_for<S, tags...>(nt::ser));
 template <typename S, typename ...tags> typename std::enable_if<is_really_auto_serializable_v<S> && !has_tuple_for_serialization<false, S, tags...>::value && is_serializable_v<S, tags...>>::type
 serialize_to(const S &c, char *&p, tags...) noexcept(is_noexcept_for<S, tags...>(nt::ser));
@@ -3342,19 +3342,19 @@ template <typename A, typename B, typename ...tags> //pair
 inline void serialize_to(const std::pair<A, B> &t, char *&p, tags... tt) noexcept(is_noexcept_for<A, tags...>(nt::ser) && is_noexcept_for<B, tags...>(nt::ser))
 { serialize_to(t.first, p, tt...); serialize_to(t.second, p, tt...); }
 template <typename T, typename ...TT, typename ...tags> //tuples
-inline void serialize_to(const std::tuple<T, TT...> &t, char *&p, tags... tt) noexcept(is_noexcept_for<std::tuple<T, TT...>, tags...>(nt::ser)) 
+inline void serialize_to(const std::tuple<T, TT...> &t, char *&p, tags... tt) noexcept(is_noexcept_for<std::tuple<T, TT...>, tags...>(nt::ser))
 { serialize_to(std::get<0>(t), p, tt...);  serialize_to(tuple_tail(t), p, tt...); }
-template <typename T, size_t L, typename ...tags> void serialize_to(const std::array<T, L> &o, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, size_t L, typename ...tags> void serialize_to(const std::array<T, L> &o, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
 { for(auto &t:o) serialize_to(t, p, tt...); }
-template <typename T, size_t L, typename ...tags, typename> void serialize_to(T const (&o)[L], char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, size_t L, typename ...tags, typename> void serialize_to(T const (&o)[L], char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
 { for(auto &t:o) serialize_to(t, p, tt...); }
-template <typename T, typename ...tags> inline void serialize_to(const std::unique_ptr<T> &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, typename ...tags> inline void serialize_to(const std::unique_ptr<T> &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
 { serialize_to(bool(pp), p); if (pp) serialize_to(*pp, p, tt...); }
-template <typename T, typename ...tags> inline void serialize_to(const std::shared_ptr<T> &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, typename ...tags> inline void serialize_to(const std::shared_ptr<T> &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
 { serialize_to(bool(pp), p); if (pp) serialize_to(*pp, p, tt...); }
-template <typename T, typename ...tags> inline void serialize_to(const T* const &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, typename ...tags> inline void serialize_to(const T* const &pp, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
 { serialize_to(bool(pp), p); if (pp) serialize_to(*pp, p, tt...); }
-template <typename T, typename ...tags> inline void serialize_to(const std::optional<T> &o, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser)) 
+template <typename T, typename ...tags> inline void serialize_to(const std::optional<T> &o, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
 { serialize_to(o.has_value(), p); if (o) serialize_to(*o, p, tt...);}
 
 //return true on overrun
@@ -3371,7 +3371,7 @@ template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_fro
 template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, float &o, tags...) noexcept { if (p+8>end) return true; o = (float)*reinterpret_cast<const double*>(p); p += 8; return false; }
 template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, double &o, tags...) noexcept { if (p+8>end) return true; o = *reinterpret_cast<const double*>(p); p += 8; return false; }
 template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, long double &o, tags...) noexcept { if (p+8>end) return true; o = *reinterpret_cast<const double*>(p); p += 8; return false; }
-template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, std::string &s, tags...) 
+template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, std::string &s, tags...)
 { uint32_t size; if (deserialize_from<false>(p, end, size) || p+size>end) return true; s.assign(p, size); p += size; return false; }
 template <bool view, typename ...tags> [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, std::string_view &s, tags...) noexcept
 { static_assert(view); uint32_t size; if (deserialize_from<false>(p, end, size) || p+size>end) return true; s = std::string_view(p, size); p += size; return false; }
@@ -3408,9 +3408,9 @@ template <bool view, typename C, typename ...tags> inline typename std::enable_i
 deserialize_from(const char *&p, const char *end, C &c, tags... tt) {
     c.clear(); ignore_pack(tt...);
     if constexpr (!is_void_like<true, C, tags...>::value) {
-        uint32_t size;  if(deserialize_from<view>(p, end, size)) return true; 
+        uint32_t size;  if(deserialize_from<view>(p, end, size)) return true;
         if constexpr (has_reserve_member<C>::value) c.reserve(size);
-        typename deserializable_value_type<C>::type e;  
+        typename deserializable_value_type<C>::type e;
         while (size--) if(deserialize_from<view>(p, end, e, tt...)) return true; else add_element_to_container(c, std::move(e));
     }
     return false;
@@ -3449,7 +3449,7 @@ deserialize_from(const char *&p, const char *end, S &s, tags... tt) noexcept(is_
 template <bool view, typename A, typename B, typename ...tags> //pair
 [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, std::pair<A, B> &t, tags... tt) noexcept(is_noexcept_for<A, tags...>(nt::deser) && is_noexcept_for<B, tags...>(nt::deser)) {
     return deserialize_from<view>(p, end, const_cast<typename std::add_lvalue_reference<typename std::remove_const<A>::type>::type>(t.first), tt...) //remove const needed for maps
-        || deserialize_from<view>(p, end, t.second, tt...); } 
+        || deserialize_from<view>(p, end, t.second, tt...); }
 template <bool view, typename T, typename ...TT, typename ...tags> //tuples
 [[nodiscard]] inline bool deserialize_from(const char *&p, const char *end, std::tuple<T, TT...> &t, tags... tt) noexcept(is_noexcept_for<std::tuple<T, TT...>, tags...>(nt::deser)) {
     if (deserialize_from<view>(p, end, std::get<0>(t), tt...)) return true;
@@ -3459,12 +3459,12 @@ template <bool view, typename T, typename ...TT, typename ...tags> //tuples
     if (deserialize_from<view>(p, end, std::get<0>(t), tt...)) return true;
     auto tail = tuple_tail(t); return deserialize_from<view>(p, end, tail, tt...); }
 template <bool view, typename T, size_t L, typename ...tags> bool deserialize_from(const char *&p, const char *end, std::array<T, L> &o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::deser))
-{ for (T &t:o) if (deserialize_from<view>(p, end, t, tt...)) return true; 
+{ for (T &t:o) if (deserialize_from<view>(p, end, t, tt...)) return true;
   return false; }
 template <bool view, typename T, size_t L, typename ...tags> bool deserialize_from(const char *&p, const char *end, T (&o)[L], tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::deser))
-{ for (T &t:o) if (deserialize_from<view>(p, end, t, tt...)) return true; 
+{ for (T &t:o) if (deserialize_from<view>(p, end, t, tt...)) return true;
   return false; }
-template <bool view, typename T, typename ...tags> bool deserialize_from(const char *&p, const char *end, std::unique_ptr<T> &pp, tags... tt) 
+template <bool view, typename T, typename ...tags> bool deserialize_from(const char *&p, const char *end, std::unique_ptr<T> &pp, tags... tt)
 { bool h; if (deserialize_from<view>(p, end, h)) return true; if (h) { pp = std::make_unique<T>(); if (deserialize_from<view>(p, end, *pp, tt...)) return true; } else pp.reset(); return false; }
 template <bool view, typename T, typename ...tags> bool deserialize_from(const char *&p, const char *end, std::shared_ptr<T> &pp, tags... tt)
 { bool h; if (deserialize_from<view>(p, end, h)) return true; if (h) { pp = std::make_shared<T>(); if (deserialize_from<view>(p, end, *pp, tt...)) return true; } else pp.reset(); return false; }
@@ -3562,7 +3562,7 @@ bool print_escaped_to(std::string& to, unsigned max_len, std::string_view s, std
  * @param [in] check_recursively If set, we parse internal 'any' elements (just checking validity)
  * @Returns any error and if none, then the length of the type and value.*/
 [[nodiscard]] inline std::tuple<std::unique_ptr<value_error>, uint32_t, uint32_t>
-serialize_scan_by_type(std::string_view type, std::string_view value, 
+serialize_scan_by_type(std::string_view type, std::string_view value,
                        bool allow_longer = false, bool check_recursively = false)
 {
     const char *p = value.data(), *end = p + value.length(); //end must not be const
@@ -3720,14 +3720,14 @@ struct deserialize_convert_params
     template <typename T, typename ...tags, typename = std::enable_if_t <is_deserializable_view_v<T, tags...>>>
     explicit deserialize_convert_params(std::string_view _value, std::string_view _type, const T*, serpolicy _convpolicy,
                                         const deserialize_convert_params *_prev,
-                                        std::vector<uf::error_value> *_e, std::vector<std::pair<size_t, size_t>> *_pos, 
+                                        std::vector<uf::error_value> *_e, std::vector<std::pair<size_t, size_t>> *_pos,
                                         tags...) :
         p(_value.data()), end(_value.data() + _value.length()),
         tstart(_type.data()), type(_type.data()), tend(_type.data() + _type.length()),
         target_tstart(_prev ? _prev->target_tstart : deserialize_type<T, tags...>().data()), //for good error reporting use the same target_tstart as in the parent (so that we show the entire target type in error messages)
         target_type(_prev ? _prev->target_type : target_tstart),                             //...but of course only if _prev is non-null. If so, we simply use the typestring of 'o'
         target_tend(target_type+deserialize_type<T, tags...>().length()),                    //limit the target type to the length typestring of 'o'
-        convpolicy(_convpolicy), prev(_prev), errors(_e), error_pos(_pos) 
+        convpolicy(_convpolicy), prev(_prev), errors(_e), error_pos(_pos)
     {
         //verify that the original target_type continues with the typestring of 'o'
         assert(_prev==nullptr || std::string_view(_prev->target_type, _prev->target_tend-_prev->target_type).starts_with(deserialize_type<T, tags...>()));
@@ -3841,10 +3841,10 @@ uint32_t default_value(const char *&type, const char *const tend, char **to);
 /** @addtogroup serialization
  * @{ */
 
-/** Creates the serialized version of the default value for a typestring. 
+/** Creates the serialized version of the default value for a typestring.
  * @param [in] typestring The typestring to create the default value for.
  * @param [inout] append_to If you set it, the value will be appended.
- * @returns The default value prepended by whatever was in 'append_to'. 
+ * @returns The default value prepended by whatever was in 'append_to'.
  * @exception uf::typestring_error if the the typestring is invalid.*/
 inline std::string default_serialized_value(std::string_view typestring, std::string &&append_to = {})
 {
@@ -3944,7 +3944,7 @@ struct any_view
     }
     /** Set to the serialized version of another any.
      * On exception we leave this unchanged.
-     * @param [in] v The string containing the serialized (type,value) 
+     * @param [in] v The string containing the serialized (type,value)
      * @param [in] check If set, we check the content of contained
      *             any elements recursively. On OK, this is justa perf degradation,
      *             on failure it is an exception.*/
@@ -3978,7 +3978,7 @@ struct any_view
     /** Returns true if we contain a structured type (list, map, tuple, any). */
     [[nodiscard]] bool is_structured_type() const noexcept { return _type.length() && (_type.front()=='l'||_type.front()=='m'||_type.front()=='t'||_type.front()=='a'); }
 
-    /** Return the contained values of structred types as any_view objects. 
+    /** Return the contained values of structred types as any_view objects.
      * Order of elements is as they appear in the serialized data.
      * - For lists or tuples we return views to their elements.
      * - For maps we return the list of keys.
@@ -3991,7 +3991,7 @@ struct any_view
      * @param [in] max_no The maximum number of elements to return ignoring the rest.*/
     [[nodiscard]] std::vector<any_view> get_content(uint32_t max_no = std::numeric_limits<uint32_t>::max()) const;
 
-    /** For maps we return their keys and values, in the order they appear in 
+    /** For maps we return their keys and values, in the order they appear in
      * the serialized data.
      * For any other type we return the content accompanied by a void view.
      * For primitive types, we return ourselves, plus a void.
@@ -4005,7 +4005,7 @@ struct any_view
      * For lists, tuples and maps, we return the number of elements (same as get_content().size()).
      * For optional and expected, we return 1 if the have a value, 0 otherwise.
      * (For expected with error this differs from get_content().size(), which is 1.)
-     * For all primitive types (including any and string) we return 0 (differs from 
+     * For all primitive types (including any and string) we return 0 (differs from
      * get_content().size(), which is 1).
      * For an empty of the unlikely case of an invalid 'any', we also return 0. */
     [[nodiscard]] uint32_t get_content_size() const noexcept;
@@ -4017,7 +4017,7 @@ struct any_view
      * and the receiving type has no expected there to take the error.
      * The type must be able to hold the value, so no string_views allowed.*/
     template<typename T, typename ...tags>
-    void get(T& t, serpolicy convpolicy = allow_converting_all, 
+    void get(T& t, serpolicy convpolicy = allow_converting_all,
              uf::use_tags_t = {}, tags... tt) const
     {
         static_assert(uf::impl::is_deserializable_f<T, false, true, tags...>(), "Type must be possible to deserialize into.");
@@ -4061,19 +4061,19 @@ struct any_view
      * This can only succeed if the any contains only
      * expected<void> members and we want to check that none of these contain errors.*/
     template<typename ...T, typename ...tags>
-    [[nodiscard]] typename uf::impl::single_type_t<T...> 
-        get_as(serpolicy convpolicy = allow_converting_all, 
+    [[nodiscard]] typename uf::impl::single_type_t<T...>
+        get_as(serpolicy convpolicy = allow_converting_all,
                uf::use_tags_t = {}, tags... tt) const
-    { 
+    {
         using TT = typename uf::impl::single_type_t<T...>;
         static_assert(std::is_void_v<TT> || uf::impl::is_deserializable_f<TT, false, true, tags...>(), "Type must be void or possible to deserialize into.");
         static_assert(std::is_void_v<TT> || std::is_default_constructible_v<TT>, "The listed types must be default constructible.");
         if constexpr (std::is_void_v<TT>) {
             std::monostate void_value; get(void_value, convpolicy, uf::use_tags, tt...);
-        } else if constexpr (uf::impl::is_deserializable_f<TT, false, false, tags...>() 
+        } else if constexpr (uf::impl::is_deserializable_f<TT, false, false, tags...>()
                              && std::is_default_constructible_v<TT>) {
             TT ret; get(ret, convpolicy, uf::use_tags, tt...); return ret;
-        } 
+        }
     }
 
     /** Extract the value from us into an arbitrary C++ variable as a view.
@@ -4083,7 +4083,7 @@ struct any_view
      * and the receiving type has no expected there to take the error.
      * The type dont have to be able to hold the value, so string_views are allowed.*/
     template<typename T, typename ...tags>
-    void get_view(T& t, serpolicy convpolicy = allow_converting_all, 
+    void get_view(T& t, serpolicy convpolicy = allow_converting_all,
                   uf::use_tags_t = {}, tags... tt) const
     {
         static_assert(uf::impl::is_deserializable_f<T, true, true, tags...>(), "Type must be possible to deserialize into.");
@@ -4133,12 +4133,12 @@ struct any_view
      * @exception uf::expected_with_error the any contains an expected with an error
      * and the receiving type has no expected there to take the error.
      * The type dont have to be able to hold the value, so string_views are allowed.
-     * It is allowed to have void-like types, then we attempt to extract to a void value. 
-     * This can only succeed if the any contains only 
+     * It is allowed to have void-like types, then we attempt to extract to a void value.
+     * This can only succeed if the any contains only
      * expected<void> members and we want to check that none of these contain errors.*/
     template<typename ...T, typename ...tags>
-    [[nodiscard]] typename uf::impl::single_type_t<T...> 
-    get_view_as(serpolicy convpolicy = allow_converting_all, 
+    [[nodiscard]] typename uf::impl::single_type_t<T...>
+    get_view_as(serpolicy convpolicy = allow_converting_all,
                 uf::use_tags_t = {}, tags... tt) const {
         using TT = typename uf::impl::single_type_t<T...>;
         static_assert(std::is_void_v<TT> || uf::impl::is_deserializable_f<TT, true, true, tags...>(), "Type must be possible to deserializable into.");
@@ -4205,7 +4205,7 @@ struct any_view
         std::string ret;
         std::string_view ty;
         if (auto err = print_to(ret, ty, max_len, chars, escape_char, json_like)) {
-            if (*err) 
+            if (*err)
                 (*err)->prepend_type0(type(), ty).throw_me();
             //non-empty optional and empty std::unique_ptr<value_error>: too long
             ret.resize(max_len);
@@ -4229,23 +4229,23 @@ struct any_view
     template <typename T, typename ...tags>
     [[nodiscard]] bool is(uf::use_tags_t = uf::use_tags, tags...) const noexcept {
         static_assert(uf::impl::is_deserializable_f<T, true, true, tags...>(), "Type must be possible to deserialize into.");
-        return _type == deserialize_type<T, tags...>(); 
+        return _type == deserialize_type<T, tags...>();
     }
 
     /** Checks if our content can be converted to a given typestring.
      * Note that this function is quite slow for returning false.
      * When you want to use the 'allow_converting_none' policy, you should
      * perhaps use is() instead.
-     * @returns true if a conversion would succeed and false if 
+     * @returns true if a conversion would succeed and false if
      * - the conversion is not possible (with this policy);
-     * - expected values holding errors would need to be converted to a non-expected 
+     * - expected values holding errors would need to be converted to a non-expected
      *   type during conversion;
      * - the supplied typestring is bad; or
      * - 'this' is bad: the type and serialized data of 'this' mismatch.
      * This function throws only std::bad_alloc.*/
     [[nodiscard]] bool converts_to(std::string_view t, serpolicy policy = allow_converting_all) const;
 
-    /** Checks if our content can be converted to a given type 
+    /** Checks if our content can be converted to a given type
      * (at least as a view, using these tags).
      * Note that this function is quite slow for returning false.
      * When you want to use the 'allow_converting_none' policy, you should
@@ -4320,7 +4320,7 @@ struct any : any_view
 {
     [[nodiscard]] any() noexcept(noexcept(std::string())) = default;
     [[nodiscard]] any(const any &o) : any_view(), _storage(o._storage) {
-        _type  = std::string_view(_storage.data()+(o._type.data() -o._storage.data()), o._type.length()); 
+        _type  = std::string_view(_storage.data()+(o._type.data() -o._storage.data()), o._type.length());
         _value = std::string_view(_storage.data()+(o._value.data()-o._storage.data()), o._value.length());
     }
     [[nodiscard]] any(any &&o) noexcept : any_view() { operator=(std::move(o)); }
@@ -4333,7 +4333,7 @@ struct any : any_view
     /** Create an 'any' from an arbitrary serializable C++ variable.
      * You can also provide tags to select the appropriate helper functions.*/
     template<typename T, typename ...tags>
-    [[nodiscard]] explicit any(const T &value, use_tags_t = {}, tags... tt) { 
+    [[nodiscard]] explicit any(const T &value, use_tags_t = {}, tags... tt) {
         static_assert(uf::impl::is_serializable_f<T, true, tags...>(), "Type must be serializable.");
         if constexpr (uf::impl::is_serializable_f<T, false, tags...>())
             assign(value, use_tags, tt...);
@@ -4342,14 +4342,14 @@ struct any : any_view
     template<typename ...tags>
     [[nodiscard]] explicit any(const char* value, use_tags_t = {}, tags...) { assign(std::string_view(value)); }
     /** Create an 'any' from the serialized version of another any.
-     * @param [in] v The string containing the serialized (type,value) 
+     * @param [in] v The string containing the serialized (type,value)
      * @param [in] check If set, we check the content of contained
      *             any elements recursively. On OK, this is justa perf degradation,
      *             on failure it is an exception.*/
     [[nodiscard]] any(from_raw_t, std::string_view v, bool check=true) { assign(from_raw, v, check); }
 
     /** Create an 'any' from the typestring and serialized version of a value.
-     * Here we do not check if the type and the value match. 
+     * Here we do not check if the type and the value match.
      * Use when this is already checked.
      * @param [in] t The typestring
      * @param [in] v The serialized value.*/
@@ -4408,29 +4408,29 @@ struct any : any_view
     [[nodiscard]] any(from_text_t, std::string_view v, bool json_like=false);
 
     any &operator=(const any_view &o) { assign(o); return *this; }
-    any &operator=(const any &o) { 
-        _storage = o._storage; 
+    any &operator=(const any &o) {
+        _storage = o._storage;
         _type = std::string_view(_storage.data()+(o._type.data() -o._storage.data()), o._type.length());
         _value = std::string_view(_storage.data()+(o._value.data()-o._storage.data()), o._value.length());
-        return *this; 
+        return *this;
     }
-    any &operator=(any &&o) noexcept { 
+    any &operator=(any &&o) noexcept {
         const size_t off_type = o._type.data() -o._storage.data();
         const size_t off_value = o._value.data()-o._storage.data();
         _storage = std::move(o._storage);
         _type = std::string_view(_storage.data()+ off_type, o._type.length());
         _value = std::string_view(_storage.data()+off_value, o._value.length());
         o.clear();
-        return *this; 
+        return *this;
     }
 
     /** Sets the value to void. Also frees memory. */
     void clear() noexcept { any_view::clear(); _storage = {}; }
 
-    void swap(any &o) noexcept { //consider SSO and that _storage may have front and back padding 
+    void swap(any &o) noexcept { //consider SSO and that _storage may have front and back padding
         const ptrdiff_t ot1 =   _type.data()-  _storage.data(), ov1 =   _value.data()-  _storage.data();
         const ptrdiff_t ot2 = o._type.data()-o._storage.data(), ov2 = o._value.data()-o._storage.data();
-        _storage.swap(o._storage); 
+        _storage.swap(o._storage);
         any_view::swap(o);
         if (_type.length())  _type =  std::string_view(_storage.data()+ot2, _type.length());
         if (_value.length()) _value = std::string_view(_storage.data()+ov2, _value.length());
@@ -4447,7 +4447,7 @@ struct any : any_view
      * @param [in] tt You can specify additional data, which will be used to select which
      *                helper function (e.g., tuple_for_serialization) to apply.
      * @returns a reference to us.
-     * If any exception happens (thrown by tuple_for_serialization() and other helpers), we 
+     * If any exception happens (thrown by tuple_for_serialization() and other helpers), we
      * leave 'this' unchanged.*/
     template<typename T, typename ...tags>
     any &assign(const T& value, uf::use_tags_t={}, tags... tt)
@@ -4491,7 +4491,7 @@ struct any : any_view
      * @param [in] value The variable to serialize into us.
      * @returns a reference to us.*/
     template <typename ...tags>
-    any &assign(const any_view& value, use_tags_t = {}, tags...) 
+    any &assign(const any_view& value, use_tags_t = {}, tags...)
     { return assign(from_type_value, value.type(), value.value(), false); }
 
     /** Sets us to the typestring and serialized version of a value
@@ -4519,7 +4519,7 @@ struct any : any_view
     /** Sets us to the typestring and serialized version of a value.
      * @param [in] t The typestring
      * @param [in] v The serialized value.
-     * @param [in] allow_longer If set, both the type and value may be longer 
+     * @param [in] allow_longer If set, both the type and value may be longer
      *             than their actual value, we simply trim them the appropriate length.
      * @returns us. In case of an exception, we leavle 'this' unchanged.
      * @exception uf::value_mismatch_error if the type does not match the value. */
@@ -4530,7 +4530,7 @@ struct any : any_view
     }
 
     /** Set to the serialized version of another any.
-     * @param [in] v The string containing the serialized (type,value) 
+     * @param [in] v The string containing the serialized (type,value)
      * @param [in] check If set, we check the content of contained
      *             any elements recursively. On OK, this is justa perf degradation,
      *             on failure it is an exception.
@@ -4541,7 +4541,7 @@ struct any : any_view
      * @param [in] v The string containing the textual description.
      *               The description may or may not contain a type description
      *               before the value, so \<s\>"aaa" and just "aaa" are both valid.
-     * @param [in] json_like If true, values (but not keys) for maps and lists are 
+     * @param [in] json_like If true, values (but not keys) for maps and lists are
      *             always serialized as an 'any'. All numbers converted to 'd'.
      *             Characters are converted to single char strings. */
     any& assign(from_text_t, std::string_view v, bool json_like=false)
@@ -4726,10 +4726,10 @@ public:
     expected(const T&t) : c(t) {}
     expected(T&&t) noexcept(std::is_nothrow_constructible_v<T, T>) : c(std::move(t)) {}
     template <typename U, typename = std::enable_if_t<std::is_constructible_v<T, const U&>>>
-    explicit expected(const expected<U> &e) noexcept(std::is_nothrow_constructible_v<T, const U&>) : 
+    explicit expected(const expected<U> &e) noexcept(std::is_nothrow_constructible_v<T, const U&>) :
         c(e.has_value() ? typename std::variant<T, error_value>(std::in_place_type<T>, *e) : e.error()) {}
     template <typename U, typename = std::enable_if_t<std::is_constructible_v<T, U&&>>>
-    explicit expected(expected<U> &&e) noexcept(std::is_nothrow_constructible_v<T, U&&>) : 
+    explicit expected(expected<U> &&e) noexcept(std::is_nothrow_constructible_v<T, U&&>) :
         c(e.has_value() ? typename std::variant<T, error_value>(std::in_place_type<T>, std::move(*e)) : std::move(e.error())) {}
     expected(const error_value &e) : c(e) {}
     expected(error_value&&e) noexcept(std::is_nothrow_constructible_v<error_value, error_value>) : c(std::move(e)) {}
@@ -4744,7 +4744,7 @@ public:
     T& emplace(Args&&... args) { c.template emplace<0>(std::forward<Args>(args)...); return std::get<0>(c); }
     error_value& emplace(const error_value& e) { set_error(e); return std::get<1>(c); }
     error_value& emplace(error_value&& e) noexcept { set_error(std::move(e)); return std::get<1>(c); }
-    
+
     using value_type = T;
     bool has_value() const noexcept { return c.index()==0; }
     void set_default_value() { c = T(); }
@@ -4805,8 +4805,8 @@ template <typename T, typename ...tags> inline void call_after_serialization(con
 } //ns impl
 
 template <typename T, typename ...tags> constexpr size_t impl::serialize_len(const expected<T>&o, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::len))
-{ return impl::serialize_len(o.has_value()) + (o.has_value() ? 
-                                               impl::serialize_len(*o, tt...) : 
+{ return impl::serialize_len(o.has_value()) + (o.has_value() ?
+                                               impl::serialize_len(*o, tt...) :
                                                impl::serialize_len(o.error(), tt...)); }
 
 template <typename T, typename ...tags> inline void impl::serialize_to(const expected<T>&o, char *&p, tags... tt) noexcept(is_noexcept_for<T, tags...>(nt::ser))
@@ -4818,7 +4818,7 @@ template <typename T, typename ...tags> inline void impl::serialize_to(const exp
         impl::serialize_to(*o, p, tt...);
 }
 
-template <bool view, typename T, typename ...tags> inline bool 
+template <bool view, typename T, typename ...tags> inline bool
 impl::deserialize_from(const char *&p, const char *end, uf::expected<T> &o, tags... tt) {
     bool has;
     if (impl::deserialize_from<false>(p, end, has)) return true;
@@ -4835,7 +4835,7 @@ impl::deserialize_from(const char *&p, const char *end, uf::expected<T> &o, tags
 }
 
 inline bool any_view::converts_to(std::string_view t, serpolicy policy) const {
-    return !uf::cant_convert(_type, t, policy, _value); 
+    return !uf::cant_convert(_type, t, policy, _value);
 }
 
 template <typename T, typename ...tags>
@@ -4848,13 +4848,13 @@ inline bool any_view::converts_to(serpolicy policy, use_tags_t, tags...) const {
 namespace impl
 {
 
-/** Parse the type from 'type' till 'tend'. Do not accept void. 
+/** Parse the type from 'type' till 'tend'. Do not accept void.
  * In the error we return we assume this is the source type.*/
 inline std::pair<std::unique_ptr<value_error>, size_t> parse_type_or_error(const char *type, const deserialize_convert_params &p) {
     assert(p.tstart<=type && type<=p.tend); //type is inside the source type
     if (type >= p.tend)
         return {create_des_typestring_source(p, ser_error_str(ser::end)), 0};
-    else if (auto [tlen, problem] = parse_type(type, p.tend, false); !problem) 
+    else if (auto [tlen, problem] = parse_type(type, p.tend, false); !problem)
         return {std::unique_ptr<value_error>{}, tlen};
     else {
         deserialize_convert_params local_p(p);
@@ -4866,7 +4866,7 @@ inline std::pair<std::unique_ptr<value_error>, size_t> parse_type_or_error(const
 /** Advance the source bytes by the amount needed for the source type.
  * If a source type pointer is provided, use that as the beginning of the
  * type and leave p.type unchanged (on error we overwrite p.type).
- * If it is not provided, use p.type and also avance it. 
+ * If it is not provided, use p.type and also avance it.
  * @returns an already encapsulated error.*/
 inline std::unique_ptr<value_error> advance_source(deserialize_convert_params &p, StringViewAccumulator* target,
                                                    const char* type = nullptr)
@@ -4892,7 +4892,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from_helper(bool &can_di
     case 'c': if (p.convpolicy & allow_converting_bool) { char oo;     if (deserialize_from<false>(p.p, p.end, oo)) goto err; o = bool(oo); } else return create_des_type_error(p, allow_converting_bool); break;
     case 'i': if (p.convpolicy & allow_converting_bool) { uint32_t oo; if (deserialize_from<false>(p.p, p.end, oo)) goto err; o = bool(oo); } else return create_des_type_error(p, allow_converting_bool); break;
     case 'I': if (p.convpolicy & allow_converting_bool) { uint64_t oo; if (deserialize_from<false>(p.p, p.end, oo)) goto err; o = bool(oo); } else return create_des_type_error(p, allow_converting_bool); break;
-    default: 
+    default:
         return create_des_type_error(p);
     err:
         return create_des_value_error(p);
@@ -5156,7 +5156,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from_helper_from_list(bo
     //do them as two-element tuples
     return deserialize_convert_from_helper_from_list<view>(can_disappear, p, source_type, std::tie(
         const_cast<typename std::add_lvalue_reference<typename std::remove_const<A>::type>::type>(t.first),
-        t.second), //remove const needed for maps   
+        t.second), //remove const needed for maps
         tt...);
 }
 
@@ -5317,13 +5317,13 @@ cant_convert<true, true>(deserialize_convert_params &p, StringViewAccumulator *t
  * @returns Any error that happened. If none, we also return a bool flag, which is
  *          true for xT types, where T can disappear (be an 'a' or 'X' or combinations)
  *          and where the expected<T> was carrying an error. This is used in trying to match
- *          a source tuple type to a shorter destination tuple type, where some elements may 
+ *          a source tuple type to a shorter destination tuple type, where some elements may
  *          decay to void.
  * If the source got an expected<T> that is not deserialized into an expected<T>,
  * but to a T (or compatible type) (so conversion happens), we
  *   a) throw the error_value in the expected<T> if it contains no value, but an error; or
  *   b) store the error_value and its positions in 'p.error' and 'p.error_pos' if non-null.
- * Note that for the above a) reason this is never a nothrow function as any input data may 
+ * Note that for the above a) reason this is never a nothrow function as any input data may
  * contain an expected, that we cannot convert. (Also we may fail to allocate in case b) to
  * the 'error' and 'error_pos' vectors.)
  * Note that this is a family of templated functions, one for all possible destination
@@ -5334,9 +5334,9 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
 {
     can_disappear = false; //this is our default
     //We need to handle single element aggregates (tuples, arrays, C-arrays) separately.
-    //Their typestring is the same as that of their element, but they do not have those 
+    //Their typestring is the same as that of their element, but they do not have those
     //member function as their element (such as clear() for containers or emplace() for optional, etc.)
-    //This could be done using an overload of deserialize_convert_from() with a tuple, but 
+    //This could be done using an overload of deserialize_convert_from() with a tuple, but
     //gcc found that ambiguous.
     if constexpr (uf::impl::is_single_element_tuple<T>::value)
         return deserialize_convert_from<view>(can_disappear, p, std::get<0>(o), tt...);
@@ -5385,7 +5385,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
             return {};
         } else if constexpr (has_tuple_for_serialization_v<true, T, tags...> && otypestr[0] != 'e') {
             //Handle struct targets with tuple_for_serialization()
-            static_assert(is_deserializable_v<T, tags...> || view, 
+            static_assert(is_deserializable_v<T, tags...> || view,
                           "Cannot deserialize to view struct in deserialize_convert_from<false>().");
             static_assert(!has_after_deserialization_v<T, tags...> || !has_after_deserialization_simple_v<T, tags...>,
                           "Only one of after_deserialization_simple() or after_deserialization(U&&) should be defined.");
@@ -5411,7 +5411,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
 #ifdef HAVE_BOOST_PFR
         } else if constexpr (is_really_auto_serializable_v<T> && otypestr[0] != 'e') {
             //Handle struct targets with auto serialization
-            static_assert(is_deserializable_v<T, tags...> || view, 
+            static_assert(is_deserializable_v<T, tags...> || view,
                           "Cannot deserialize to view struct in deserialize_convert_from<false>().");
             auto &&tmp = boost::pfr::structure_tie(o);
             //let errors (some error other than uf::value_error, e.g., thrown by a tuple_for_serialization()) pass up
@@ -5431,8 +5431,8 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                     o.set_default_value();
                     if (is_void) {
                         //got an expected<void>
-                        //X->xT (where t!=void). 
-                        //First we try to convert void->T. 
+                        //X->xT (where t!=void).
+                        //First we try to convert void->T.
                         deserialize_convert_params local_p(p, p.type, p.target_tend); //source is empty now
                         local_p.target_type++; //now local_p is (void)->x*T
                         if (auto ret = deserialize_convert_from<view>(can_disappear, local_p, *o, tt...)) { //void->T does not work, now try decaying X to void.
@@ -5470,9 +5470,9 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                         --p.type;
                         return create_des_type_error(p, allow_converting_expected);
                     }
-                    /* if (is_void) it is X*->U: 
+                    /* if (is_void) it is X*->U:
                         *    Decay the X and try again with what comes after the X.
-                        * else it is x*T->U. 
+                        * else it is x*T->U.
                         *    Try deserializing the value into 'o'. by doing x*T->U
                         *    (if o is error_value, we simply fail.)
                         * So in both cases we go on.*/
@@ -5527,7 +5527,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                     return deserialize_convert_from<view>(can_disappear, p, o, tt...);
             } else {//the optional is empty
                 if constexpr (otypestr[0] == 'o') {
-                    //This is oT->oU with empty optional. Check that T->U is possible 
+                    //This is oT->oU with empty optional. Check that T->U is possible
                     if (auto err = uf::impl::cant_convert<false, false>(p, nullptr)) //also moves p.type, p.target_type
                         return err;
                     o.reset(); //shared_ptr, unique_ptr and optional all have reset()
@@ -5551,7 +5551,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                 p.type++;
                 p.target_type += otypestr.size();
                 return {};
-            } else if constexpr (otypestr[0] == 'X') { 
+            } else if constexpr (otypestr[0] == 'X') {
                 //T->X, We got a non-expected value (*p.type=='x' is handled above) into an X.
                 //This is only valid if we have void incoming
                 if (p.type!=p.tend)
@@ -5582,8 +5582,8 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
             //OK it is T->oU
             return deserialize_convert_from_helper<view>(can_disappear, p, o, tt...); //allocate and try receiving a value
         } else {
-            //Here we handle the cases, when 
-            //- neither source, nor target is optional or expected; 
+            //Here we handle the cases, when
+            //- neither source, nor target is optional or expected;
             //- target is neither 'any' nor a structure (but can be a tuple); and
             //- source is not the same as target.
             //Ensure we have remaining incoming type left
@@ -5635,7 +5635,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
             case 'l':
             {
                 //check special case of lc->s
-                if constexpr (otypestr[0] == 's') 
+                if constexpr (otypestr[0] == 's')
                     if (p.type + 1 < p.tend && p.type[1] == 'c') {
                         if (p.convpolicy & allow_converting_aux) {
                             if (deserialize_from<view>(p.p, p.end, o))
@@ -5734,7 +5734,7 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                     if (!size) {
                         //jump across the key and value type
                         for (int i = 0; i<2; i++)
-                            if (auto [err, tlen] = parse_type_or_error(p.type, p); err) 
+                            if (auto [err, tlen] = parse_type_or_error(p.type, p); err)
                                 return std::move(err);
                             else p.type += tlen;
                         //We dont check if they are compatible with T::value_type
@@ -5814,9 +5814,9 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                     p.type++;
                 }
                 std::unique_ptr<value_error> ret;
-                if constexpr (otypestr[0] == 'l') { 
+                if constexpr (otypestr[0] == 'l') {
                     //This is t<num>XYZ->lX
-                    if (p.convpolicy & allow_converting_tuple_list) { 
+                    if (p.convpolicy & allow_converting_tuple_list) {
                         //Create a copy, where tend is replaced by end_of_incoming.
                         //We dont want to ready beyond the incoming tuple's type
                         deserialize_convert_params local_p(p, end_of_incoming, p.target_tend);
@@ -5840,14 +5840,14 @@ inline std::unique_ptr<value_error> deserialize_convert_from(bool &can_disappear
                             return {};
                         }
                         //else we could not convert member-by-member, try converting void-like members away - but keep the error we have here.
-                    } // else if policy does not allow, we attempt to 'convert void-like members away', see below                    
-                } 
+                    } // else if policy does not allow, we attempt to 'convert void-like members away', see below
+                }
                 //Here we may have 'ret' set if policy allows tuple->list and we attempted member-by-member conversion
                 //to the list element type and failed. In this case we attempt to convert void-like members away, e.g.,
                 //t2Xli->li fill fail the member-by-member, as 'X' will never convert to 'i'. In that case we try to convert
                 //(below) X to i *or nothing*, the latter of which may succeed if 'X' contains a value (which is void) and then
                 //we can simply copy the second member of the tuple to the outgoing 'li'. However, if we cannot, because
-                //the tuple is, e.g., t2ss (nothing to convert to 'li') we shall emit the error we have generated during the 
+                //the tuple is, e.g., t2ss (nothing to convert to 'li') we shall emit the error we have generated during the
                 //member-by-member conversion as the user is likely expecting that.
                 //Create a copy, where tend is replaced by end_of_incoming.
                 //We dont want to ready beyond the incoming tuple's type
@@ -5930,7 +5930,7 @@ constexpr std::optional<size_t> ATTR_PURE__ can_disappear(std::string_view type)
     switch (type.front()) {
     default:
         return {};
-    case 'a': 
+    case 'a':
     case 'X': return 1;
     case 'x':
         if (type.length() == 1) return {};
@@ -6058,7 +6058,7 @@ inline std::string print_escaped_json_string(std::string_view s)
 }
 
 template <typename E, typename ...tags>
-typename std::enable_if_t<std::is_enum<E>::value, bool> 
+typename std::enable_if_t<std::is_enum<E>::value, bool>
 serialize_print_append(std::string &to, bool json_like, unsigned max_len, const E &e, std::string_view chars, char escape_char, tags... tt);
 template <typename C, typename ...tags>
 typename std::enable_if_t<is_serializable_container<C>::value && !is_map_container<C>::value && !has_tuple_for_serialization<false, C, tags...>::value, bool>
@@ -6066,7 +6066,7 @@ serialize_print_append(std::string &to, bool json_like, unsigned max_len, const 
 template <typename M, typename ...tags>
 typename std::enable_if_t<is_map_container<M>::value && !has_tuple_for_serialization<false, M, tags...>::value, bool> serialize_print_append(std::string &to, bool json_like, unsigned max_len, const M &e, std::string_view chars, char escape_char, tags... tt);
 template <typename S, typename ...tags>
-typename std::enable_if_t<has_tuple_for_serialization<false, S, tags...>::value, bool> 
+typename std::enable_if_t<has_tuple_for_serialization<false, S, tags...>::value, bool>
 serialize_print_append(std::string &to, bool json_like, unsigned max_len, const S &, std::string_view chars, char escape_char, tags... tt);
 template <typename S, typename ...tags>
 typename std::enable_if_t<is_really_auto_serializable_v<S> && !has_tuple_for_serialization<false, S, tags...>::value, bool>
@@ -6113,19 +6113,19 @@ template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned /*max_len*/, const long double &d, std::string_view /*chars*/, char /*escape_char*/, tags...) { to.append(print_floating_point(d, json_like)); return false; }
 template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::string_view &s, std::string_view chars, char escape_char, tags...)
-{ to.reserve(to.length()+s.length()+2); to.push_back('\"'); 
-if (json_like) {if (print_escaped_to(to, max_len, s, chars, escape_char)) return true; } 
-else if (print_escaped_to(to, max_len, print_escaped_json_string(s), chars, escape_char)) return true; 
+{ to.reserve(to.length()+s.length()+2); to.push_back('\"');
+if (json_like) {if (print_escaped_to(to, max_len, s, chars, escape_char)) return true; }
+else if (print_escaped_to(to, max_len, print_escaped_json_string(s), chars, escape_char)) return true;
 to.push_back('\"'); return false;}
 template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::string &s, std::string_view chars, char escape_char, tags...)
-{ to.reserve(to.length()+s.length()+2); to.push_back('\"'); 
-if (json_like) {if (print_escaped_to(to, max_len, s, chars, escape_char)) return true; } 
-else if (print_escaped_to(to, max_len, print_escaped_json_string(s), chars, escape_char)) return true; 
+{ to.reserve(to.length()+s.length()+2); to.push_back('\"');
+if (json_like) {if (print_escaped_to(to, max_len, s, chars, escape_char)) return true; }
+else if (print_escaped_to(to, max_len, print_escaped_json_string(s), chars, escape_char)) return true;
 to.push_back('\"'); return false; }
 template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const any_view &a, std::string_view chars, char escape_char, tags...) {
-    std::string_view ty; 
+    std::string_view ty;
     auto ret = a.print_to(to, ty, max_len, chars, escape_char, json_like);
     if (!ret) return false; //OK
     if (*ret) (*ret)->throw_me(); //Some error
@@ -6141,7 +6141,7 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
         std::string tmp;
         if (serialize_print_append(tmp, false, 0, err, {}, escape_char))
             return true;
-        return serialize_print_append(to, true, max_len, tmp, chars, escape_char); 
+        return serialize_print_append(to, true, max_len, tmp, chars, escape_char);
     } else {
         to.append("err");
         auto t = err.tuple_for_serialization();
@@ -6196,7 +6196,7 @@ serialize_print_append(std::string &to, bool json_like, unsigned max_len, const 
 #ifdef HAVE_BOOST_PFR
 template <typename S, typename ...tags>
 inline typename std::enable_if<is_really_auto_serializable_v<S> && !has_tuple_for_serialization<false, S, tags...>::value, bool>::type
-serialize_print_append(std::string &to, bool json_like, unsigned max_len, const S &s, std::string_view chars, char escape_char, tags... tt) 
+serialize_print_append(std::string &to, bool json_like, unsigned max_len, const S &s, std::string_view chars, char escape_char, tags... tt)
 { return serialize_print_append(to, json_like, max_len, boost::pfr::structure_tie(s), chars, escape_char, tt...); }
 #endif
 template <typename A, typename B, typename ...tags> //pair
@@ -6216,7 +6216,7 @@ inline bool serialize_print_append_sub(std::string &to, bool json_like, unsigned
 { return serialize_print_append(to, json_like, max_len, std::get<0>(t), chars, escape_char, tt...); }
 template <typename T, typename ...TT, typename ...tags> //tuples
 inline bool serialize_print_append_sub(std::string &to, bool json_like, unsigned max_len, const std::tuple<T, TT...> &t, std::string_view chars, char escape_char, tags... tt){
-    if (serialize_print_append(to, json_like, max_len, std::get<0>(t), chars, escape_char, tt...)) return true; 
+    if (serialize_print_append(to, json_like, max_len, std::get<0>(t), chars, escape_char, tt...)) return true;
     to.push_back(','); return serialize_print_append_sub(to, json_like, max_len, tuple_tail(t), chars, escape_char, tt...); }
 template <typename T, typename ...TT, typename ...tags> //tuples
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::tuple<T, TT...> &t, std::string_view chars, char escape_char, tags... tt)
@@ -6254,7 +6254,7 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
     for (auto &e : o)
         if (serialize_print_append(to, json_like, max_len, e, chars, escape_char, tt...))
             return true;
-        else if constexpr (L>1) 
+        else if constexpr (L>1)
             to.push_back(',');
     if constexpr (L>1) to.back() = json_like ? ']' : ')';
     return max_len && to.length() > max_len;
@@ -6262,22 +6262,22 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
 template <typename T, typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::unique_ptr<T> &pp, std::string_view chars, char escape_char, tags... tt)
 { if (pp) return serialize_print_append(to, json_like, max_len, *pp, chars, escape_char, tt...);
-  if (json_like) to.append("null"); 
+  if (json_like) to.append("null");
   return false;}
 template <typename T, typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::shared_ptr<T> &pp, std::string_view chars, char escape_char, tags... tt)
 { if (pp) return serialize_print_append(to, json_like, max_len, *pp, chars, escape_char, tt...);
-  if (json_like) to.append("null"); 
+  if (json_like) to.append("null");
   return false;}
 template <typename T, typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const T* const& pp, std::string_view chars, char escape_char, tags... tt)
 { if (pp) return serialize_print_append(to, json_like, max_len, *pp, chars, escape_char, tt...);
-  if (json_like) to.append("null"); 
+  if (json_like) to.append("null");
   return false;}
 template <typename T, typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned max_len, const std::optional<T> &o, std::string_view chars, char escape_char, tags... tt)
 { if (o) return serialize_print_append(to, json_like, max_len, *o, chars, escape_char, tt...);
-  if (json_like) to.append("null"); 
+  if (json_like) to.append("null");
   return false;}
 
 
@@ -6308,9 +6308,9 @@ inline bool serialize_print_append(std::string &to, bool json_like, unsigned max
  *                              When it returns true, we consider the expected printed, else we print it from the serialized data.
  *                              It can be used to print something for errors that are missing from serialized data
  * @returns an empty optional on success; an optional with no error if we have exceeeded the max length and need to be trimmed; or
- *          an optional with some error. The exceptions in the errors will contain the typestring suffix remaining after the error. 
+ *          an optional with some error. The exceptions in the errors will contain the typestring suffix remaining after the error.
  *          This has to be adjusted in callers*/
-[[nodiscard]] std::optional<std::unique_ptr<value_error>> 
+[[nodiscard]] std::optional<std::unique_ptr<value_error>>
 serialize_print_by_type_to(std::string &to, bool json_like, unsigned max_len, std::string_view &type,
                            const char *&p, const char *end, std::string_view chars, char escape_char,
                            std::function<bool(std::string &, unsigned, std::string_view &,
@@ -6372,7 +6372,7 @@ inline any::any(from_text_t, std::string_view v, bool json_like)
     if (v.empty()) return;
     std::string_view original = v;
     auto [t, invalid] = impl::parse_value(_storage, v, json_like ? impl::ParseMode::JSON_Loose : impl::ParseMode::Liberal);
-    if (invalid) 
+    if (invalid)
         throw value_mismatch_error(uf::concat("Error parsing text: '", original.substr(0, v.data() - original.data()),
                                               '*', v, "': ", t)); //t is an error string if invalid
     //We will have the value, followed by the type
@@ -6422,7 +6422,7 @@ parse_any_content(std::string_view _type, std::string_view _value,
  * @{ */
 
 /** Helper to test your struct that it is both serializable from and deserializable to
- * and with the same typestring. In case of problems you get some explanation. 
+ * and with the same typestring. In case of problems you get some explanation.
  * When checking for deserialization we allow only owning objects. Use it like
  * @code
  *  struct mystruct {
@@ -6530,7 +6530,7 @@ inline std::string serialize(const T &t, uf::use_tags_t = {}, tags... tt) {
  *                    If the serializable object is of zero length, this function is
  *                    still called, but what is returned is simply passed on as return value
  *                    of uf::serialize().
- *                    If a nullptr is returned, no serialization occurs, but after_serialization(false) 
+ *                    If a nullptr is returned, no serialization occurs, but after_serialization(false)
  *                    is called and nullptr and the required length is returned.
  * @param [in] tt You can specify additional data, which will be used to select which
  *                helper function (e.g., tuple_for_serialization) to apply.
@@ -6574,11 +6574,11 @@ inline std::pair<char*, size_t> serialize(Alloc alloc, const T &t, uf::use_tags_
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns the remaining data as string_view. If !allow_longer data, it is empty.*/
 template <typename T=int, typename ...tags>
-inline std::string_view deserialize(std::string_view s, T &&t, bool allow_longer_data = false, 
+inline std::string_view deserialize(std::string_view s, T &&t, bool allow_longer_data = false,
                                     uf::use_tags_t = {}, tags... tt) {
     static_assert(uf::impl::is_deserializable_f<T, false, true, tags...>(), "Type must be possible to deserialize into.");
     const char *p = s.data();
-    if (impl::deserialize_from<false>(p, s.data()+s.length(), t, tt...)) 
+    if (impl::deserialize_from<false>(p, s.data()+s.length(), t, tt...))
         throw value_mismatch_error(uf::concat(impl::ser_error_str(impl::ser::val), " (deser) <%1>."), deserialize_type<T, tags...>(), 0);
     if (!allow_longer_data && p!=s.data()+s.length())
         throw value_mismatch_error(uf::concat(s.data() + s.length()-p, " bytes left after deserializing ", p-s.data(), " bytes to <%1>"),
@@ -6599,12 +6599,12 @@ inline std::string_view deserialize(std::string_view s, T &&t, bool allow_longer
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns The placeholder to deserialize into.*/
 template <typename T, typename ...tags>
-inline T deserialize_as(std::string_view s, bool allow_longer_data = false, 
+inline T deserialize_as(std::string_view s, bool allow_longer_data = false,
                         uf::use_tags_t = {}, tags...tt) {
     static_assert(std::is_default_constructible_v<T>, "Result must be default constructible.");
-    T t;  
+    T t;
     deserialize(s, t, allow_longer_data, uf::use_tags, tt...);
-    return t; 
+    return t;
 }
 
 /** Deserialize from a bytearray with a known type to a C++ variable with potential conversions.
@@ -6624,7 +6624,7 @@ inline T deserialize_as(std::string_view s, bool allow_longer_data = false,
 template <typename T = int, typename ...tags>
 inline std::string_view  deserialize_convert(std::string_view s, std::string_view from_type, T &v,
                                              serpolicy convpolicy = uf::allow_converting_all,
-                                             bool allow_longer_data = false, 
+                                             bool allow_longer_data = false,
                                              uf::use_tags_t = {}, tags... tt)
 {
     static_assert(uf::impl::is_deserializable_f<T, false, true, tags...>(), "Type must be possible to deserialize into.");
@@ -6662,7 +6662,7 @@ inline std::string_view  deserialize_convert(std::string_view s, std::string_vie
 template <typename T = int, typename ...tags>
 inline std::string_view deserialize_convert(std::string_view s, std::string_view from_type, T &&v,
                                             serpolicy convpolicy = uf::allow_converting_all,
-                                            bool allow_longer_data = false, 
+                                            bool allow_longer_data = false,
                                             uf::use_tags_t = {}, tags... tt) {
     return deserialize(s, from_type, v, convpolicy, allow_longer_data, uf::use_tags, tt...);
 }
@@ -6683,12 +6683,12 @@ inline std::string_view deserialize_convert(std::string_view s, std::string_view
 template <typename T, typename ...tags>
 inline T deserialize_convert_as(std::string_view s, std::string_view from_type,
                                 serpolicy convpolicy = uf::allow_converting_all,
-                                bool allow_longer_data = false, 
+                                bool allow_longer_data = false,
                                 uf::use_tags_t = {}, tags... tt) {
     static_assert(std::is_default_constructible_v<T>, "Result must be default constructible.");
     T v;
-    deserialize_convert(s, from_type, v, convpolicy, allow_longer_data, uf::use_tags, tt...); 
-    return v; 
+    deserialize_convert(s, from_type, v, convpolicy, allow_longer_data, uf::use_tags, tt...);
+    return v;
 }
 
 
@@ -6705,7 +6705,7 @@ inline T deserialize_convert_as(std::string_view s, std::string_view from_type,
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns the remaining data as string_view. If !allow_longer data, it is empty.*/
 template <typename T, typename ...tags>
-inline std::string_view deserialize_view(std::string_view s, T &t, bool allow_longer_data = false, 
+inline std::string_view deserialize_view(std::string_view s, T &t, bool allow_longer_data = false,
                                          uf::use_tags_t = {}, tags... tt) {
     static_assert(uf::impl::is_deserializable_f<T, true, true, tags...>(), "Type must be possible to deserialize into.");
     const char *p = s.data();
@@ -6731,7 +6731,7 @@ inline std::string_view deserialize_view(std::string_view s, T &t, bool allow_lo
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns the remaining data as string_view. If !allow_longer data, it is empty.*/
 template <typename T, typename ...tags>
-    inline std::string_view deserialize_view(std::string_view s, T &&t, bool allow_longer_data = false, 
+    inline std::string_view deserialize_view(std::string_view s, T &&t, bool allow_longer_data = false,
                                              uf::use_tags_t = {}, tags... tt) {
     return deserialize_view(s, t, allow_longer_data, uf::use_tags, tt...);
 }
@@ -6750,12 +6750,12 @@ template <typename T, typename ...tags>
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns The placeholder to deserialize into.*/
 template <typename T, typename ...tags>
-inline T deserialize_view_as(std::string_view s, bool allow_longer_data = false, 
+inline T deserialize_view_as(std::string_view s, bool allow_longer_data = false,
                              uf::use_tags_t = {}, tags...tt) {
     static_assert(std::is_default_constructible_v<T>, "Result must be default constructible.");
-    T t;  
+    T t;
     deserialize_view(s, t, allow_longer_data, uf::use_tags, tt...);
-    return t; 
+    return t;
 }
 
 /** Deserialize from a bytearray with a known type to a C++ variable with potential conversions.
@@ -6814,7 +6814,7 @@ template <typename T = int, typename ...tags>
                                                      serpolicy convpolicy = uf::allow_converting_all,
                                                      bool allow_longer_data = false,
                                                      uf::use_tags_t = {}, tags... tt) {
-    return deserialize_view_convert(s, from_type, v, convpolicy, allow_longer_data, 
+    return deserialize_view_convert(s, from_type, v, convpolicy, allow_longer_data,
                                     uf::use_tags, tt...);
 }
 
@@ -6840,14 +6840,14 @@ inline T deserialize_view_convert_as(std::string_view s, std::string_view from_t
     T v;
     deserialize_view_convert(s, from_type, v, convpolicy, allow_longer_data,
                              uf::use_tags, tt...);
-    return v; 
+    return v;
 }
 
 /** Returns empty if from_type can be converted to to_type.
  * If not, it returns the appropriate exception - without throwing it.
  * Note that it cannot check dynamic type info due to lack of actual value
- * and returns true if there is any possible value that could allow this type 
- * conversion. Thus, e.g., a->T is always accepted (if `allow_converting_any` is 
+ * and returns true if there is any possible value that could allow this type
+ * conversion. Thus, e.g., a->T is always accepted (if `allow_converting_any` is
  * part of the policy). Also, `a` values can disappear, as they may contain void,
  * thus, e.g., `t2ai` is convertible to `i`*/
 [[nodiscard]] inline std::unique_ptr<value_error> cant_convert(std::string_view from_type, std::string_view to_type, serpolicy convpolicy)
@@ -6907,12 +6907,12 @@ cant_convert(std::string_view from_type, std::string_view to_type, serpolicy con
  * @exception uf::type_mismatch_error the conversion is not possible (with this policy)
  * @exception uf::expected_with_error if expected values holding errors would need to be
  *   converted to a non-expected type during conversion.
- * @exception uf::typestring_error bad typestring 
+ * @exception uf::typestring_error bad typestring
  * @exception uf::value_mismatch_error the from type and serialized data mismatch
  * @returns The converted value if different from 'from_data'. If it is
  *          the same as from_data, an empty optional is returned.*/
 inline std::optional<std::string>
-convert(std::string_view from_type, std::string_view to_type, 
+convert(std::string_view from_type, std::string_view to_type,
         serpolicy policy, std::string_view from_data, bool check)
 {
     if (from_type == to_type && !check) return {}; //fast path: equality
@@ -6959,7 +6959,7 @@ convert(std::string_view from_type, std::string_view to_type,
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns the ascii printable text. If the string is trimmed, it ends in ...*/
 template <typename T, typename ...tags>
-inline std::string serialize_print(const T& t, bool json_like = false, unsigned max_len = 0, 
+inline std::string serialize_print(const T& t, bool json_like = false, unsigned max_len = 0,
                                    std::string_view chars = {}, char escape_char = '%',
                                    uf::use_tags_t = {}, tags... tt) {
     static_assert(uf::impl::is_serializable_f<T, true, tags...>(), "Type must be serializable.");
@@ -6989,13 +6989,13 @@ inline std::string serialize_print(const T& t, bool json_like = false, unsigned 
  * @param [in] escape_char What escape character to use.
  * @returns the ascii printable text. If the string is trimmed, it ends in ...
  */
-inline std::string serialize_print_by_type(std::string_view type, std::string_view serialized, bool json_like = false, 
+inline std::string serialize_print_by_type(std::string_view type, std::string_view serialized, bool json_like = false,
                                            unsigned max_len = 0, std::string_view chars = {}, char escape_char='%')
 {
     const char *start = serialized.data();
     std::string_view worktype = type;
     std::string ret;
-    if (auto err = impl::serialize_print_by_type_to(ret, json_like, max_len, worktype, start, 
+    if (auto err = impl::serialize_print_by_type_to(ret, json_like, max_len, worktype, start,
                                                     serialized.data() + serialized.length(), chars, escape_char)) {
         if (*err) //error
             (*err)->prepend_type0(type, worktype).throw_me();
@@ -7011,7 +7011,7 @@ inline std::string serialize_print_by_type(std::string_view type, std::string_vi
 
 /** Parses a string to see if it is a valid type.
  * If OK, we return the pos of the next char after.
- * On error we return 0. 
+ * On error we return 0.
  * Note: This is equivalent to successfully parsing a zero-length
  * typestring at the beginning of 'type', which is a valid typestring
  * for void-like types. */
@@ -7033,7 +7033,7 @@ inline std::string print_escaped(std::string_view v, unsigned max_len = 0, std::
  * @param [in] escape_char Specify what was used as escaped char when printing.*/
 inline std::string parse_escaped(std::string_view v, char escape_char = '%')
 { std::string ret; impl::parse_escaped_string_to(ret, v, escape_char); return ret; }
- 
+
 /** @} serialization */
 
 /** @addtogroup serialization
@@ -7100,7 +7100,7 @@ auto tup_ptr(const std::variant<T...> &v, std::index_sequence<Is...>) noexcept {
 } //ns impl
 } //ns uf
 
-namespace std 
+namespace std
 {
 template <typename ...T>
 auto tuple_for_serialization(const std::variant<T...> &v) noexcept {
@@ -7108,7 +7108,7 @@ auto tuple_for_serialization(const std::variant<T...> &v) noexcept {
 }
 template <typename ...T>
 auto tuple_for_serialization(std::variant<T...> &) noexcept {
-    return std::tuple<std::optional<T>...>(); 
+    return std::tuple<std::optional<T>...>();
 }
 template <typename ...T>
 void after_deserialization(std::variant<T...> &v, std::tuple<std::optional<T>...> &&t) {
