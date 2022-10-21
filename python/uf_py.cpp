@@ -88,7 +88,7 @@ std::string serialize_append_guess(serialize_output_t &to,
             case 0: std::get<0>(to).push_back(v==Py_True); break;
             case 1: *(std::get<1>(to).first++) = v==Py_True; break;
             case 2: std::get<2>(to) += 1; break;
-            default: assert(0); 
+            default: assert(0);
         }
         type.push_back('b');
         return {};
@@ -151,7 +151,7 @@ std::string serialize_append_guess(serialize_output_t &to,
             return serialize_append_guess(to, type, PyTuple_GetItem(v, 0), mode);
         type.push_back('t');
         type.append(std::to_string(PyTuple_Size(v)));
-        for (unsigned u = 0; u<PyTuple_Size(v); u++) 
+        for (unsigned u = 0; u<PyTuple_Size(v); u++)
             if (PyObject* item = PyTuple_GetItem(v, u); item == Py_None) {
                 //None items are represented in a tuple as an empty any.
                 //This is to preserve tuple size - which the user maybe wants.
@@ -208,7 +208,7 @@ std::string serialize_append_guess(serialize_output_t &to,
     }
     //Here we do a bit of an optimization for vanilla dicts
     //For dicts the PyDict_Next() can iterate the dict without allocating new objects
-    //For all other objects supporting the Mapping protocol, we convert them to a 
+    //For all other objects supporting the Mapping protocol, we convert them to a
     //sequence of (key,value) tuples and iterate the list.
     //Note: for very large mappables that are iterable, we may be cheaper by using an iterator instead.
     const bool is_dict = PyDict_Check(v);
@@ -221,7 +221,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                 return {};
             }
             std::string key_type;
-            std::string mapped_type;
+            std::string mapped_type = uf::impl::IsJSON(mode) ? "a" : "";
             //a saved value to be restored to
             const std::variant<size_t, char*> original =
                 to.index() == 0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
@@ -245,7 +245,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                     return true;
                 };
             PyObject* key, * value;
-            bool key_auto = false, mapped_auto = false;
+            bool key_auto = false, mapped_auto = uf::impl::IsJSON(mode);
             bool restart;
             do {
                 restart = false;
@@ -263,20 +263,22 @@ std::string serialize_append_guess(serialize_output_t &to,
                         auto err = serialize_append(to, p, key);
                         if (err.length())
                             return err;
-                } else {
+                    } else {
                         std::string tmp_key_type;
                         auto err = serialize_append_guess(to, tmp_key_type, key, mode);
                         if (err.length())
                             return err;
-                        if (key_type.length() == 0)
+                        if (key_type.length() == 0) {
+                            if (uf::impl::IsJSON(mode) && tmp_key_type != "s")
+                                return uf::concat("Cannot serialize: non-string key type ('", tmp_key_type, "') as JSON in dict/mapping: '", to_string(v), "'.");
                             key_type = std::move(tmp_key_type);
-                        else if (key_type != tmp_key_type) {
-                            if (mode != uf::impl::ParseMode::Normal) {
+                        } else if (key_type != tmp_key_type) {
+                            if (mode == uf::impl::ParseMode::Liberal) {
                                 key_auto = true;
                                 key_type = "a";
                                 restart = true;
                                 break;
-                        } else {
+                            } else {
                                 return uf::concat("Cannot serialize: non-uniform key types ('", key_type,
                                                   "' vs. '", tmp_key_type, "') in dict/mapping: '", to_string(v), "'.");
                             }
@@ -287,7 +289,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                         auto err = serialize_append(to, p, value);
                         if (err.length())
                             return err;
-                } else {
+                    } else {
                         std::string tmp_mapped_type;
                         auto err = serialize_append_guess(to, tmp_mapped_type, value, mode);
                         if (err.length())
@@ -300,7 +302,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                                 mapped_type = "a";
                                 restart = true;
                                 break;
-                        } else {
+                            } else {
                                 return uf::concat("Cannot serialize: non-uniform value types ('", mapped_type,
                                                   "' vs. '", tmp_mapped_type, "') in dict/mapping: '", to_string(v), "'.");
                             }
@@ -324,42 +326,44 @@ std::string serialize_append_guess(serialize_output_t &to,
             type.append("la");
             return {};
         }
-        std::string my_type;
-        //a saved value to be restored to
-        const std::variant<size_t, char*> original =
-            to.index()==0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
-            to.index()==1 ? std::variant<size_t, char*>(std::in_place_index<1>, std::get<1>(to).first) :
-            to.index()==2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) : 
-            std::variant<size_t, char *>(std::in_place_index<0>, 0);
-        for (unsigned u = 0; u<size; u++) {
-            std::string tmp_type;
-            auto err = serialize_append_guess(to, tmp_type, PySequence_GetItem(v, u), mode);
-            if (err.length())
-                return err;
-            if (u==0)
-                my_type = std::move(tmp_type);
-            else if (my_type!=tmp_type) {
-                if (mode== uf::impl::ParseMode::Normal)
-                    return uf::concat("Cannot serialize: non-uniform types ('", my_type,
-                                      "' vs. '", tmp_type, "') in list/sequence: '", to_string(v), "'.");
-                goto list_again_as_any;
+        if (!uf::impl::IsJSON(mode)) { //try deducing the element type
+            std::string my_type;
+            //a saved value to be restored to
+            const std::variant<size_t, char*> original =
+                to.index() == 0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
+                to.index() == 1 ? std::variant<size_t, char*>(std::in_place_index<1>, std::get<1>(to).first) :
+                to.index() == 2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) :
+                std::variant<size_t, char*>(std::in_place_index<0>, 0);
+            for (unsigned u = 0; u < size; u++) {
+                std::string tmp_type;
+                auto err = serialize_append_guess(to, tmp_type, PySequence_GetItem(v, u), mode);
+                if (err.length())
+                    return err;
+                if (u == 0)
+                    my_type = std::move(tmp_type);
+                else if (my_type != tmp_type) {
+                    if (mode == uf::impl::ParseMode::Normal)
+                        return uf::concat("Cannot serialize: non-uniform types ('", my_type,
+                                          "' vs. '", tmp_type, "') in list/sequence: '", to_string(v), "'.");
+                    goto list_again_as_any;
+                }
             }
-        }
-        if (my_type.length() == 0) {
-            if (mode!= uf::impl::ParseMode::Normal) goto list_again_as_any;
-            return uf::concat("Cannot serialize: all elements (", PySequence_Size(v), ") are None in list/sequence.");
-        }
-        type.push_back('l');
-        type.append(my_type);
-        return {};
-    list_again_as_any:
-        //turn into any - start over and do it again
-        //restore 'original'
-        switch (to.index()) {
-        case 0: std::get<0>(to).resize(std::get<0>(original)); break;
-        case 1: std::get<1>(to).first = std::get<1>(original); break;
-        case 2: std::get<2>(to) = std::get<0>(original); break;
-        default: assert(0);
+            if (my_type.length() == 0) {
+                if (mode != uf::impl::ParseMode::Normal) goto list_again_as_any;
+                return uf::concat("Cannot serialize: all elements (", PySequence_Size(v), ") are None in list/sequence.");
+            }
+            type.push_back('l');
+            type.append(my_type);
+            return {};
+        list_again_as_any:
+            //turn into any - start over and do it again
+            //restore 'original'
+            switch (to.index()) {
+            case 0: std::get<0>(to).resize(std::get<0>(original)); break;
+            case 1: std::get<1>(to).first = std::get<1>(original); break;
+            case 2: std::get<2>(to) = std::get<0>(original); break;
+            default: assert(0);
+            }
         }
         for (unsigned u = 0; u < size; u++) {
             std::string_view p = "a";
@@ -382,7 +386,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         const std::variant<size_t, char*> original =
             to.index()==0 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<0>(to).length()) :
             to.index()==1 ? std::variant<size_t, char*>(std::in_place_index<1>, std::get<1>(to).first) :
-            to.index()==2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) : 
+            to.index()==2 ? std::variant<size_t, char*>(std::in_place_index<0>, std::get<2>(to)) :
             std::variant<size_t, char *>(std::in_place_index<0>, 0);
         PyObject *iterator = PyObject_GetIter(v);
         PyObject *item;
@@ -607,7 +611,7 @@ std::string serialize_append(serialize_output_t &to, std::string_view &type, PyO
         if (is_void) return {};
         return serialize_append(to, type, v);
     }
-    case 'e': 
+    case 'e':
         if (error_value_check(v)) {
             type.remove_prefix(1);
             if (!((uf_error_value*)v)->error)
@@ -772,7 +776,7 @@ PyObject *deserialize_as_python(std::string_view original_type, std::string_view
         if (p==end)
             Py_RETURN_NONE;
     value_mismatch:
-        throw uf::value_mismatch_error(uf::concat(uf::impl::ser_error_str(uf::impl::ser::val), " (python) <%1>."), 
+        throw uf::value_mismatch_error(uf::concat(uf::impl::ser_error_str(uf::impl::ser::val), " (python) <%1>."),
                                        original_type, type.data()-original_type.data());
     }
     switch (type.front()) {
@@ -872,7 +876,7 @@ PyObject *deserialize_as_python(std::string_view original_type, std::string_view
                     type.remove_prefix(l);
                 else {
                     Py_DECREF(val);
-                    throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(err), " (python) <%1>."), 
+                    throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(err), " (python) <%1>."),
                                                original_type, type.data()-original_type.data()+l);
                 }
             }
@@ -952,7 +956,7 @@ PyObject *deserialize_as_python(std::string_view original_type, std::string_view
             if (auto [l, err] = uf::impl::parse_type(type, false); !err)
                 type.remove_prefix(l);
             else
-                throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(err), " (python) <%1>."), 
+                throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(err), " (python) <%1>."),
                                            original_type, type.data()-original_type.data()+l);
         }
     } [[fallthrough]]; //fallthrough to error
@@ -992,7 +996,7 @@ PyObject *deserialize_as_python(std::string_view original_type, std::string_view
         Py_RETURN_NONE;
     }
     default:
-        throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(uf::impl::ser::chr), " (python) <%1>."), 
+        throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(uf::impl::ser::chr), " (python) <%1>."),
                                    original_type, type.data()-original_type.data());
     }
 }
