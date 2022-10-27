@@ -1779,3 +1779,20 @@ TEST_CASE("floating point print") {
     CHECK(uf::serialize_print(ld, false)=="2.16306e+11");
     CHECK(uf::serialize_print(ld, true)=="216306000004.");
 }
+
+TEST_CASE("serialize_print void-like") {
+    struct { 
+        std::monostate m; 
+        std::tuple<> t; 
+        auto tuple_for_serialization() const noexcept { return std::tie(m, t); }
+    } s;
+    std::vector<decltype(s)> v(2);
+    CHECK(uf::serialize_print(s) == "(,)");
+    CHECK(uf::serialize_print(s, true) == "[null,null]");
+    CHECK(uf::serialize_print(s.m) == "");
+    CHECK(uf::serialize_print(s.m, true) == "null");
+    CHECK(uf::serialize_print(s.t) == "");
+    CHECK(uf::serialize_print(s.t, true) == "null");
+    CHECK(uf::serialize_print(v) == "[(,),(,)]");
+    CHECK(uf::serialize_print(v, true) == "[[null,null],[null,null]]");
+}

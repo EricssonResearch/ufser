@@ -6081,6 +6081,10 @@ template <typename T, typename ...tags> bool serialize_print_append(std::string&
 template <typename T, typename ...tags> bool serialize_print_append(std::string& to, bool json_like, unsigned max_len, const T* const& pp, std::string_view chars, char escape_char, tags... tt);
 template <typename T, typename ...tags> bool serialize_print_append(std::string& to, bool json_like, unsigned max_len, const std::optional<T>& o, std::string_view chars, char escape_char, tags... tt);
 
+//A void-like value, that is not a tuple nor a container
+template <typename T, typename ...tags> requires (is_void_like<false,T,tags...>::value && !is_serializable_container<T>::value && !has_tuple_for_serialization<false, T, tags...>::value)
+inline bool serialize_print_append(std::string &to, bool json_like, unsigned /*max_len*/, const T &, std::string_view /*chars*/, char /*escape_char*/, tags...)
+{ if (json_like) to.append("null"); return false; }
 template <typename ...tags>
 inline bool serialize_print_append(std::string &to, bool json_like, unsigned /*max_len*/, const bool &b, std::string_view /*chars*/, char /*escape_char*/, tags...)
 { to.append(json_like ? (b ? "true" : "false") : (b ? "True" : "False")); return false;}
