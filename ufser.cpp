@@ -1406,6 +1406,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
     skip_whitespace(value);
     if (value.length() == 0) return {{}, false};
     if (value.front() == '\'') {
+        if (IsJSON(mode)) return {"Use double-quotes in JSON.", true};
         if (value.length()<3) return {"Strange character literal.", true};
         if (value[2]=='\'') {
             to.push_back(value[1]);
@@ -1416,15 +1417,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
             value.remove_prefix(5);
         } else
             return {"Strange character literal.", true};
-        if (!IsJSON(mode)) return { "c", false };
-        //JSON: instead of the character have a single byte string
-        char c = to.back();
-        to.back() = 0;
-        to.push_back(0);
-        to.push_back(0);
-        to.push_back(1);
-        to.push_back(c);
-        return {"s", false};
+        return {"c", false};
     }
     if (value.front() == '\"') {
         size_t pos = value.find_first_of('\"', 1);
@@ -1567,7 +1560,10 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
                 else if (key_type!=t) return {uf::concat("Mismatching key types : <", key_type, "> and <", t, ">."), true};
                 skip_whitespace(value);
                 if (value.length() == 0) return {"Missing mapped value and closing '}'.", true};
-                if (value.front()!=':' && value.front()!='=') return {"Keys and values must be separated by ':' or '='.", true};
+                if (value.front() != ':') {
+                    if (IsJSON(mode)) return {"Keys and values must be separated by ':'.", true};
+                    if (value.front() != '=') return {"Keys and values must be separated by ':' or '='.", true};
+                }
                 value.remove_prefix(1);
                 skip_whitespace(value);
                 const size_t size_before = to.size();
@@ -1612,6 +1608,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
             return { IsJSON(mode) ? "msa" : "maa", false}; //could not determine map type
     }
     if (value.front()=='(') {
+        if (IsJSON(mode)) return {"Parenthesis cannot be used in JSON.", true};
         value.remove_prefix(1);
         skip_whitespace(value);
         std::string type;
@@ -1633,7 +1630,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         if (num<2) return {"Tuples need at least 2 elements.", true};
         return {uf::concat('t', num, type), false};
     }
-    if (value.front()=='<') {
+    if (value.front()=='<' && !IsJSON(mode)) {
         std::string_view save = value;
         value.remove_prefix(1);
         skip_whitespace(value);
@@ -1695,7 +1692,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
         value.remove_prefix(4);
         return { "", false };
     }
-    if (value.substr(0, 5)=="error") {
+    if (value.substr(0, 5)=="error" && !IsJSON(mode)) {
         value.remove_prefix(5);
         skip_whitespace(value);
         if (value.length() == 0 || value.front() != '(') return {"Missing 1-4 elements of error_value", true};
@@ -1714,10 +1711,7 @@ std::pair<std::string, bool> uf::impl::parse_value(std::string &to, std::string_
             return {"Error must contain 's', 't2ss', 't3sss' or 't4sssa'.", true}; //error_value must be a t4sssa (or part of it)
         return {"e", false};
     }
-    return {uf::concat("Did not recognize this: '", value.substr(0,7),
-                        value.length()>7 ? "...'." : "'.",
-                        isalpha(value.front()) ? " (Maybe missing '\"' for strings?)" : ""),
-             true};
+    return {isalpha(value.front()) ? "Syntax error. (Maybe missing '\"' for strings?)" : "Syntax error.", true};
 }
 
 

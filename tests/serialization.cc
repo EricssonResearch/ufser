@@ -1131,19 +1131,19 @@ TEST_CASE("number text") {
     sv = "-a";
     std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
-    CHECK(err=="Did not recognize this: '-a'.");
+    CHECK(err=="Syntax error.");
     CHECK(sv=="-a");
 
     sv = ".a";
     std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
-    CHECK(err=="Did not recognize this: '.a'.");
+    CHECK(err == "Syntax error.");
     CHECK(sv==".a");
 
     sv = "ABC";
     std::tie(err, e) = uf::impl::parse_value(dummy, sv, uf::impl::ParseMode::Normal);
     CHECK(e);
-    CHECK(err=="Did not recognize this: 'ABC'. (Maybe missing '\"' for strings?)");
+    CHECK(err=="Syntax error. (Maybe missing '\"' for strings?)");
     CHECK(sv=="ABC");
 
     sv = "1ea";
@@ -1665,9 +1665,7 @@ TEST_CASE("JSON") {
     CHECK(a.print_json()==R"("c")");
     CHECK(a.type()=="c");
 
-    REQUIRE_NOTHROW(a.assign(uf::from_text, json, true));
-    CHECK(a.print_json()==R"("c")");
-    CHECK(a.type()=="s");
+    REQUIRE_THROWS_MESSAGE(a.assign(uf::from_text, json, true), "Error parsing text: '*'c'': Use double-quotes in JSON.");
 }
 
 TEST_CASE("tuple<->list") {
@@ -1795,4 +1793,27 @@ TEST_CASE("serialize_print void-like") {
     CHECK(uf::serialize_print(s.t, true) == "null");
     CHECK(uf::serialize_print(v) == "[(,),(,)]");
     CHECK(uf::serialize_print(v, true) == "[[null,null],[null,null]]");
+}
+
+
+std::string invalid_json(const std::string_view json, std::string_view expected_type) {
+    std::string_view json1 = json;
+    std::string res1;
+    const auto [type1, invalid1] = uf::impl::parse_value(res1, json1, uf::impl::ParseMode::Liberal);
+    CHECK_FALSE(invalid1);
+    CHECK(type1 == expected_type);
+
+    std::string_view json2 = json;
+    std::string res2;
+    const auto [type2, invalid2] = uf::impl::parse_value(res2, json2, uf::impl::ParseMode::JSON_Loose);
+    CHECK(invalid2);
+    return uf::concat(json.substr(0, json2.data() - json.data()), '*', json2);
+}
+
+TEST_CASE("JSON parsing") {
+    //constructs that are valid ufser, but not JSON
+    CHECK(invalid_json("{'a':1}", "mci") == "{*'a':1}");
+    CHECK(invalid_json("<d>42", "a") == "*<d>42");
+    CHECK(invalid_json("{\"a\":(0,1)}", "mst2ii") == "{\"a\":*(0,1)}");
+    CHECK(invalid_json("error(\"type\",\"id\")", "e") == "*error(\"type\",\"id\")");
 }
