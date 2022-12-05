@@ -37,7 +37,7 @@ PyObject *python_serialize(PyObject *, PyObject *args, PyObject *kwargs) {
     std::optional<std::string_view> type;
     if (type_ptr) type = std::string_view(type_ptr, type_len);
     try {
-        const uf::any val = serialize_as(obj, type, liberal);
+        const uf::any val = serialize_as(obj, type, liberal ? uf::impl::ParseMode::Liberal : uf::impl::ParseMode::Normal);
         if (type_value) {
             return Py_BuildValue("y#y#", val.type().data(), val.type().size(), val.value().data(), val.value().size());
         } else {
@@ -67,7 +67,7 @@ PyObject *python_deserialize(PyObject *, PyObject *args) {
         return ret;
     } catch (uf::value_error const &e) {
         PyBuffer_Release(&buff);
-        return err(PyExc_ValueError, e.what()); 
+        return err(PyExc_ValueError, e.what());
     } catch (std::bad_alloc const &e) {
         PyBuffer_Release(&buff);
         return err(PyExc_MemoryError, e.what());
@@ -119,7 +119,7 @@ static void
 error_value_dealloc(uf_error_value* self)
 {
     //We must leave pending Python exceptions alone
-    delete self->error; //this is noexcept 
+    delete self->error; //this is noexcept
     self->error = nullptr;
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -142,7 +142,7 @@ error_value_get(uf_error_value* self, void *c)
 static int
 error_value_set(uf_error_value* self, PyObject *v, void *c)
 {
-    if (!v) return err(PyExc_AttributeError, "Cannot delete " UF_ERRNAME " attributes."), -1; 
+    if (!v) return err(PyExc_AttributeError, "Cannot delete " UF_ERRNAME " attributes."), -1;
     if ((size_t)c == 0) {
         try {
             self->error->value = serialize_as(v);
