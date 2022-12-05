@@ -1,13 +1,30 @@
 Example usage of ``ufser``
 ==========================
 
-    >>> import ufser
+    >>> import ufser, tracemalloc, gc
 
     >>> ufser.version is not None
     True
+
+Go throuh all thests in uf::serialize_append_guess to fill the ABC and Enum module members.
+    >>> try:
+    ...    ufser.serialize(id)
+    ... except:
+    ...    pass
+
+    >>> tracemalloc.start(10)
+    >>> stat = tracemalloc.take_snapshot()
 
     >>> ufser.serialize('hello')
     b'\x00\x00\x00\x01s\x00\x00\x00\t\x00\x00\x00\x05hello'
 
     >>> ufser.serialize(['hello', 'world'])
     b'\x00\x00\x00\x02ls\x00\x00\x00\x16\x00\x00\x00\x02\x00\x00\x00\x05hello\x00\x00\x00\x05world'
+
+    >>> ufser.deserialize(b'\x00\x00\x00\x02ls\x00\x00\x00\x16\x00\x00\x00\x02\x00\x00\x00\x05hello\x00\x00\x00\x05world')
+    ['hello', 'world']
+
+    >>> _ = gc.collect()
+    >>> for item in tracemalloc.take_snapshot().compare_to(stat, 'lineno'):
+    ...   if 'lib/python3' not in str(item):
+    ...      print(item)

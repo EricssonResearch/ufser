@@ -19,6 +19,17 @@ static void serialize_append_uint32(serialize_output_t& to, uint32_t size)
     }
 }
 
+class pyobj {
+    std::unique_ptr<PyObject, void(*)(PyObject*)> p;
+public:
+    pyobj(PyObject* o = nullptr) noexcept : p{o, [](PyObject* x) { Py_XDECREF(x); }} {}
+    static pyobj wrap(PyObject* o) noexcept { Py_XINCREF(o); return pyobj(o); }// assumes borrowed references, like PyArg_ParseTuple()
+    operator PyObject* () const noexcept { return p.get(); }
+    explicit operator bool() const noexcept { return bool(p); }
+    PyObject* release() noexcept { return p.release(); }
+};
+
+
 static PyObject* ABC = nullptr, * ABC_Sequence = nullptr, * ABC_Mapping = nullptr;
 static PyObject* enum_Enum = nullptr;
 
@@ -72,15 +83,6 @@ std::string GetExceptionText() {
 std::string serialize_append_guess(serialize_output_t &to,
                                    std::string& type, PyObject* v, uf::impl::ParseMode mode)
 {
-
-    class pyobj {
-        std::unique_ptr<PyObject, void(*)(PyObject*)> p;
-    public:
-        pyobj(PyObject* o = nullptr) noexcept : p{ o, [](PyObject* x) { Py_XDECREF(x); } } {}
-        static pyobj wrap(PyObject* o) noexcept { Py_XINCREF(o); return pyobj(o); }// assumes borrowed references, like PyArg_ParseTuple()
-        operator PyObject* () const noexcept { return p.get(); }
-        explicit operator bool() const noexcept { return bool(p); }
-    };
     if (v==nullptr) return {};
     if (v==Py_None) return {};
     if (v==Py_False || v==Py_True) {
@@ -188,8 +190,9 @@ std::string serialize_append_guess(serialize_output_t &to,
         return {};
     }
     //Check if the type has "__dict_for_serialization__" member
-    if (PyObject_HasAttrString(v, DICT_FOR_SERIALIZATION_ATTR_NAME)) {
-        pyobj v2 = PyObject_GetAttrString(v, DICT_FOR_SERIALIZATION_ATTR_NAME);
+    static PyObject* __dict_for_serialization__ = PyUnicode_FromString(DICT_FOR_SERIALIZATION_ATTR_NAME);
+    if (PyObject_HasAttr(v, __dict_for_serialization__)) {
+        pyobj v2 = PyObject_GetAttr(v, __dict_for_serialization__);
         if (!v2) {
             std::string err = GetExceptionText();
             return uf::concat("Error obtaining (the existing) '__dict_for_serialization__' attr of value '", to_string(v), "' of type '", to_string((PyObject*)Py_TYPE(v)), "'",
@@ -336,7 +339,7 @@ std::string serialize_append_guess(serialize_output_t &to,
                 std::variant<size_t, char*>(std::in_place_index<0>, 0);
             for (unsigned u = 0; u < size; u++) {
                 std::string tmp_type;
-                auto err = serialize_append_guess(to, tmp_type, PySequence_GetItem(v, u), mode);
+                auto err = serialize_append_guess(to, tmp_type, pyobj{PySequence_GetItem(v, u)}, mode);
                 if (err.length())
                     return err;
                 if (u == 0)
@@ -367,7 +370,7 @@ std::string serialize_append_guess(serialize_output_t &to,
         }
         for (unsigned u = 0; u < size; u++) {
             std::string_view p = "a";
-            auto err = serialize_append(to, p, PySequence_GetItem(v, u));
+            auto err = serialize_append(to, p, pyobj{PySequence_GetItem(v, u)});
             if (err.length())
                 return err;
         }
@@ -858,71 +861,47 @@ PyObject *deserialize_as_python(std::string_view original_type, std::string_view
         } else {
             uint32_t size = 0;
             if (uf::impl::deserialize_from<false>(p, end, size)) goto value_mismatch;
-            PyObject *val = PyList_New(size);
+            pyobj val = PyList_New(size);
             type.remove_prefix(1);
             if (size) {
                 const std::string_view my_type = type;
                 for (unsigned u = 0; u<size; u++) {
-                    try {
-                        type = my_type;
-                        PyList_SetItem(val, u, deserialize_as_python(original_type, type, p, end));
-                    } catch (...) {
-                        Py_DECREF(val); //also kills objects already added
-                        throw;
-                    }
+                    type = my_type;
+                    PyList_SetItem(val, u, deserialize_as_python(original_type, type, p, end));
                 }
-            } else {
+            } else
                 if (auto [l, err] = uf::impl::parse_type(type, false); !err)
                     type.remove_prefix(l);
-                else {
-                    Py_DECREF(val);
+                else
                     throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(err), " (python) <%1>."),
                                                original_type, type.data()-original_type.data()+l);
-                }
-            }
-            return val;
+            return val.release();
         }
     case 'm': {
         uint32_t size = 0;
         if (uf::impl::deserialize_from<false>(p, end, size)) goto value_mismatch;
-        PyObject *val = PyDict_New();
+        pyobj val = PyDict_New();
         type.remove_prefix(1);
         if (size) {
             std::string_view my_type = type;
             for (unsigned u = 0; u<size; u++) {
-                PyObject *key = nullptr;
-                PyObject *value = nullptr;
-                try {
-                    type = my_type;
-                    key = deserialize_as_python(original_type, type, p, end);
-                    value = deserialize_as_python(original_type, type, p, end);
-                } catch (...) {
-                    Py_XDECREF(key);
-                    Py_XDECREF(value);
-                    Py_DECREF(val); //also kills objects already added
-                    throw;
-                }
-                if (-1==PyDict_SetItem(val, key, value)) {
-                    auto s = to_string(key);
-                    Py_XDECREF(key);
-                    Py_XDECREF(value);
-                    Py_DECREF(val); //also kills objects already added
-                    throw uf::value_mismatch_error(uf::concat("Error in inserting to dictionary: '", s, "'."),
+                type = my_type;
+                //These may throw
+                const pyobj key = deserialize_as_python(original_type, type, p, end);
+                const pyobj value = deserialize_as_python(original_type, type, p, end);
+                if (-1==PyDict_SetItem(val, key, value)) //does NOT steal a ref
+                    throw uf::value_mismatch_error(uf::concat("Error in inserting to dictionary: '", key, "'."),
                                                    original_type, type.data()-original_type.data());
-                }
             }
-        } else {
+        } else
             for (int i = 0; i<2; i++) {
                 if (auto [l,err] = uf::impl::parse_type(type, false); !err)
                     type.remove_prefix(l);
-                else {
-                    Py_DECREF(val);
+                else
                     throw uf::typestring_error(uf::concat(uf::impl::ser_error_str(err), " (python) <%1>."),
                                                original_type, type.data()-original_type.data()+l);
-                }
             }
-        }
-        return val;
+        return val.release();
     }
     case 't': {
         type.remove_prefix(1);
@@ -931,16 +910,10 @@ PyObject *deserialize_as_python(std::string_view original_type, std::string_view
             size = size*10 + type.front()-'0';
             type.remove_prefix(1);
         }
-        PyObject *val = PyTuple_New(size);
-        for (unsigned u = 0; u<size; u++) {
-            try {
-                PyTuple_SetItem(val, u, deserialize_as_python(original_type, type, p, end));
-            } catch (...) {
-                Py_DECREF(val); //also kills objects already added
-                throw;
-            }
-        }
-        return val;
+        pyobj val = PyTuple_New(size);
+        for (unsigned u = 0; u<size; u++)
+            PyTuple_SetItem(val, u, deserialize_as_python(original_type, type, p, end));
+        return val.release();
     }
     case 'x':
     case 'X': {
