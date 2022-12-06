@@ -25,5 +25,5 @@ test:
   script:
     - env | sort
     - ./autogen
-    - ./configure ${DEBUG:+--enable-debug}
+    - ./configure ${DEBUG:+--enable-debug} --enable-python
     - make -j check ${VERBOSE:+V=1}

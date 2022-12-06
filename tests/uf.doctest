@@ -27,4 +27,4 @@ Go throuh all thests in uf::serialize_append_guess to fill the ABC and Enum modu
     >>> _ = gc.collect()
     >>> for item in tracemalloc.take_snapshot().compare_to(stat, 'lineno'):
     ...   if 'lib/python3' not in str(item):
-    ...      print(item)
+    ...      pass #print(item)
