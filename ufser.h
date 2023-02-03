@@ -6735,8 +6735,8 @@ inline std::string_view deserialize_view(std::string_view s, T &t, bool allow_lo
  *                helper function (e.g., tuple_for_serialization) to apply.
  * @returns the remaining data as string_view. If !allow_longer data, it is empty.*/
 template <typename T, typename ...tags>
-    inline std::string_view deserialize_view(std::string_view s, T &&t, bool allow_longer_data = false,
-                                             uf::use_tags_t = {}, tags... tt) {
+inline std::string_view deserialize_view(std::string_view s, T &&t, bool allow_longer_data = false,
+                                         uf::use_tags_t = {}, tags... tt) {
     return deserialize_view(s, t, allow_longer_data, uf::use_tags, tt...);
 }
 
