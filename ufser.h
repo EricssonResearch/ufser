@@ -4245,7 +4245,7 @@ protected:
     explicit any_view(std::string_view t, std::string_view v) noexcept : _type(t), _value(v) {}
     std::string_view _type;
     std::string_view _value;
-    friend std::pair<std::string, bool> impl::parse_value(std::string &to, std::string_view &value, ParseMode mode);
+    friend std::pair<std::string, bool> impl::parse_value(std::string &to, std::string_view &value, impl::ParseMode mode);
 };
 
 /** An object that can hold any value and its type.
