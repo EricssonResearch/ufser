@@ -2753,10 +2753,13 @@ constexpr auto serialize_type_static_impl(const std::pair<A, B> *, const tag_tup
 }
 template <bool des, typename tag_tuple> constexpr auto serialize_typelist_static(const std::tuple<>*, const tag_tuple* = nullptr) noexcept { return make_string(""); }
 template <bool des, typename tag_tuple> constexpr auto serialize_typelist_static(const std::monostate*, const tag_tuple * = nullptr) noexcept { return make_string(""); }
-template <bool des, typename T, typename tag_tuple> //tuples
-constexpr auto serialize_typelist_static(const std::tuple<T> *, const tag_tuple*) noexcept { typename std::add_pointer<std::remove_reference_t<T>>::type x = nullptr; return serialize_type_static_impl<des>(x, (const tag_tuple*)nullptr); }
 template <bool des, typename T, typename ...TT, typename tag_tuple> //tuples
-constexpr auto serialize_typelist_static(const std::tuple<T, TT...> *, const tag_tuple*) noexcept { typename std::add_pointer<std::remove_reference_t<T>>::type y = nullptr; typename std::tuple<TT...>*x = nullptr; return serialize_type_static_impl<des>(y, (const tag_tuple*)nullptr) + serialize_typelist_static<des>(x, (const tag_tuple*)nullptr); }
+constexpr auto serialize_typelist_static(const std::tuple<T, TT...>*, const tag_tuple*) noexcept {
+    auto x = serialize_type_static_impl<des>((std::add_pointer_t<std::remove_reference_t<T>>) nullptr, (const tag_tuple*) nullptr);
+    if constexpr (!sizeof...(TT))
+        return x;
+    return std::move(x) + serialize_typelist_static<des>((const std::tuple<TT...>*) nullptr, (const tag_tuple*) nullptr);
+}
 template <bool des, typename T, typename tag_tuple> //single element tuple (not part of a recursive processing of a larger tuple) is really its type. Avoid "t1" that only leads to ambiguity
 constexpr auto serialize_type_static_impl(const std::tuple<T> *, const tag_tuple*) noexcept { typename std::add_pointer<std::remove_reference_t<T>>::type x = nullptr; return serialize_type_static_impl<des>(x, (const tag_tuple*)nullptr); }
 template <size_t N>
@@ -2890,7 +2893,6 @@ template <typename S, typename tag_tuple> constexpr typename std::enable_if<is_r
 has_before_serialization_inside_f(const S *, tag_tuple *) noexcept;
 template <typename A, typename B, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::pair<A, B> *, tag_tuple *) noexcept;
 template <typename T, typename ...TT, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *) noexcept;
-template <typename T, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::tuple<T> *, tag_tuple *) noexcept;
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::array<T, L> *, tag_tuple *);
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_before_serialization_inside_f(T const (*)[L], tag_tuple *);
 template <typename T, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::unique_ptr<T> *, tag_tuple *);
@@ -2914,10 +2916,13 @@ has_before_serialization_inside_f(const S *s, tag_tuple *tags) noexcept
 #endif
 template <typename A, typename B, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::pair<A, B> *, tag_tuple *tags) noexcept
 { std::remove_cvref_t<A>* x = nullptr; std::remove_cvref_t <B>*y = nullptr; return has_before_serialization_inside_f(x, tags) || has_before_serialization_inside_f(y, tags); }
-template <typename T, typename ...TT, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *tags) noexcept
-{ std::remove_cvref_t<T> *x = nullptr; std::tuple<TT...> *y=nullptr; return has_before_serialization_inside_f(x, tags) || has_before_serialization_inside_f(y, tags); }
-template <typename T, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::tuple<T> *, tag_tuple *tags) noexcept
-{ std::remove_cvref_t<T> *x = nullptr; return has_before_serialization_inside_f(x, tags); }
+template<typename T, typename ...TT, typename tag_tuple>
+constexpr bool has_before_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *tags) noexcept {
+    auto x = has_before_serialization_inside_f((std::remove_cvref_t<T>*) nullptr, tags);
+    if constexpr (!sizeof...(TT))
+        return x;
+    return std::move(x) || has_before_serialization_inside_f((const std::tuple<TT...>*) nullptr, tags);
+}
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_before_serialization_inside_f(const std::array<T, L> *, tag_tuple *tags)
 { std::remove_cvref_t<T> *x = nullptr; return has_before_serialization_inside_f(x, tags); }
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_before_serialization_inside_f(T const (*)[L], tag_tuple *tags)
@@ -2950,7 +2955,6 @@ template <typename A, typename B, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::pair<A, B> *, tag_tuple *) noexcept;
 template <typename T, typename ...TT, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *) noexcept;
-template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::tuple<T> *, tag_tuple *) noexcept;
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::array<T, L> *, tag_tuple *);
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_after_serialization_inside_f(T const (*)[L], tag_tuple *);
 template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::unique_ptr<T> *, tag_tuple *);
@@ -2975,11 +2979,13 @@ has_after_serialization_inside_f(const S *s, tag_tuple *tags) noexcept
 template <typename A, typename B, typename tag_tuple>
 constexpr bool has_after_serialization_inside_f(const std::pair<A, B> *, tag_tuple *tags) noexcept
 { std::remove_cvref_t<A>* x = nullptr; std::remove_cvref_t <B>*y = nullptr; return has_after_serialization_inside_f(x, tags) || has_after_serialization_inside_f(y, tags); }
-template <typename T, typename ...TT, typename tag_tuple>
-constexpr bool has_after_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *tags) noexcept
-{ std::remove_cvref_t<T> *x = nullptr; std::tuple<TT...> *y=nullptr; return has_after_serialization_inside_f(x, tags) || has_after_serialization_inside_f(y, tags); }
-template <typename T, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::tuple<T> *, tag_tuple *tags) noexcept
-{ std::remove_cvref_t<T> *x = nullptr; return has_after_serialization_inside_f(x, tags); }
+template<typename T, typename ...TT, typename tag_tuple>
+constexpr bool has_after_serialization_inside_f(const std::tuple<T, TT...> *, tag_tuple *tags) noexcept {
+    auto x = has_after_serialization_inside_f((std::remove_cvref_t<T>*) nullptr, tags);
+    if constexpr (!sizeof...(TT))
+        return x;
+    return std::move(x) || has_after_serialization_inside_f((const std::tuple<TT...>*) nullptr, tags);
+}
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_after_serialization_inside_f(const std::array<T, L> *, tag_tuple *tags)
 { std::remove_cvref_t<T> *x = nullptr; return has_after_serialization_inside_f(x, tags); }
 template <typename T, size_t L, typename tag_tuple> constexpr bool has_after_serialization_inside_f(T const (*)[L], tag_tuple *tags)
