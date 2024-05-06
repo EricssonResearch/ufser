@@ -1,3 +1,7 @@
+/** This file is part of the uFser project which is released under the MIT license.
+ * See file COPYING for full license details.
+ * Copyright 2024 Ericsson AB
+ */
 #include "ufser.h"
 
 uint32_t uf::impl::default_value(const char *&type, const char *const tend, char **to) {
